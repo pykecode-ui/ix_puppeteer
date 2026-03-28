@@ -1,0 +1,28 @@
+{
+  "name": "ix-bot",
+  "version": "1.0.0",
+  "description": "Bot portável de automação ixBrowser — conecta ao dashboard via API + Socket.io",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "nodemon bot.js"
+  },
+  "nodemonConfig": {
+    "watch": ["bot.js", "src/", "config.js"],
+    "ext": "js,json",
+    "ignore": ["node_modules/"],
+    "delay": 500
+  },
+  "dependencies": {
+    "axios": "^1.7.2",
+    "puppeteer-core": "^22.11.0",
+    "socket.io-client": "^4.7.5",
+    "uuid": "^10.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}

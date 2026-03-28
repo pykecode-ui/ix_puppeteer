@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Dashboard de automação ixBrowser — controle múltiplos bots em tempo real via Socket.io." />
+  <title>ix Dashboard — Multi-Bot</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+  <!-- ── Sidebar ─────────────────────────────────────────────────────────── -->
+  <aside class="sidebar" role="navigation" aria-label="Menu principal">
+    <div class="sidebar-logo">
+      <div class="logo-icon" aria-hidden="true">🕹</div>
+      <div>
+        <div class="logo-text">ix Dashboard</div>
+        <div class="logo-version">Multi-Bot · Puppeteer</div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <span class="nav-section-label">Painel</span>
+
+      <a class="nav-item active" id="navBots" href="#" role="menuitem" data-section="bots">
+        <span class="nav-icon" aria-hidden="true">🤖</span>
+        <span>Bots</span>
+        <span class="nav-badge" id="navBotCount">0</span>
+      </a>
+
+      <a class="nav-item" id="navProfiles" href="#" role="menuitem" data-section="profiles">
+        <span class="nav-icon" aria-hidden="true">👤</span>
+        <span>Perfis</span>
+        <span class="nav-badge" id="navProfileCount">0</span>
+      </a>
+
+      <a class="nav-item" id="navLogs" href="#" role="menuitem" data-section="logs">
+        <span class="nav-icon" aria-hidden="true">📋</span>
+        <span>Logs</span>
+      </a>
+
+      <span class="nav-section-label">Sistema</span>
+
+      <a class="nav-item" id="navSettings" href="#" role="menuitem" data-section="settings">
+        <span class="nav-icon" aria-hidden="true">⚙️</span>
+        <span>Configurações</span>
+      </a>
+    </nav>
+
+    <!-- Status da conexão Socket.io -->
+    <div class="sidebar-footer">
+      <div class="sidebar-status">
+        <div class="status-dot offline" id="sidebarStatusDot" aria-hidden="true"></div>
+        <div>
+          <div class="status-text">Servidor</div>
+          <div class="status-label offline" id="sidebarStatusLabel">Offline</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main ───────────────────────────────────────────────────────────── -->
+  <main class="main" role="main">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <div>
+          <div class="header-title" id="headerTitle">Bots Registrados</div>
+          <div class="header-subtitle" id="headerSubtitle">Controle múltiplos bots em tempo real</div>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="header-badge" id="socketBadge" aria-label="Status da conexão">
+          <div class="dot" id="socketStatusDot"></div>
+          <span id="socketStatusLabel">Aguardando...</span>
+        </div>
+        <span class="header-time" id="headerTime" aria-label="Horário atual"></span>
+      </div>
+    </header>
+
+    <!-- Content -->
+    <div class="content">
+
+      <!-- ══════════════════════════════════════════════════════════════════ -->
+      <!-- SEÇÃO: BOTS                                                        -->
+      <!-- ══════════════════════════════════════════════════════════════════ -->
+      <section id="sectionBots" class="section-page active">
+
+        <!-- Stats Row -->
+        <div class="stats-row" aria-label="Estatísticas rápidas">
+
+          <div class="stat-card">
+            <div class="stat-icon purple" aria-hidden="true">🤖</div>
+            <div class="stat-info">
+              <div class="stat-value" id="statTotalBots">0</div>
+              <div class="stat-label">Bots Registrados</div>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon green" aria-hidden="true">🟢</div>
+            <div class="stat-info">
+              <div class="stat-value" id="statOnlineBots">0</div>
+              <div class="stat-label">Bots Online</div>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon yellow" aria-hidden="true">🖥</div>
+            <div class="stat-info">
+              <div class="stat-value" id="statActiveProfiles">0</div>
+              <div class="stat-label">Perfis Ativos</div>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon purple" aria-hidden="true">📡</div>
+            <div class="stat-info">
+              <div class="stat-value" id="statSocketId">—</div>
+              <div class="stat-label">Socket ID</div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Grid de bots -->
+        <div class="bots-grid" id="botsGrid">
+          <div class="empty-state" id="botsEmptyState">
+            <div class="empty-icon">🤖</div>
+            <div class="empty-title">Nenhum bot registrado</div>
+            <div class="empty-desc">Inicie um bot com <code>node bot.js</code> para vê-lo aparecer aqui.</div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════════ -->
+      <!-- SECÃO: PERFIS                                                        -->
+      <!-- ══════════════════════════════════════════════════════════════════ -->
+      <section id="sectionProfiles" class="section-page">
+
+        <!-- Stats Row -->
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-icon purple" aria-hidden="true">👤</div>
+            <div class="stat-info">
+              <div class="stat-value" id="statTotalProfiles">0</div>
+              <div class="stat-label">Perfis Cadastrados</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green" aria-hidden="true">✅</div>
+            <div class="stat-info">
+              <div class="stat-value" id="statAssignedProfiles">0</div>
+              <div class="stat-label">Perfis Atribuídos</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Formulário de cadastro -->
+        <article class="card" aria-label="Cadastrar perfis">
+          <div class="card-header">
+            <div class="card-title-group">
+              <div class="card-icon" style="background: var(--purple-soft);" aria-hidden="true">➕</div>
+              <div>
+                <div class="card-title">Cadastrar Perfis</div>
+                <div class="card-subtitle">Adicione perfis individualmente ou em massa</div>
+              </div>
+            </div>
+            <!-- Abas -->
+            <div class="profile-tabs">
+              <button class="ptab active" id="ptabSingle" data-tab="single">Individual</button>
+              <button class="ptab" id="ptabBulk" data-tab="bulk">Em Massa</button>
+            </div>
+          </div>
+          <div class="card-body" style="padding: 16px 22px;">
+
+            <!-- Aba: individual -->
+            <div id="ptabContentSingle" class="ptab-content">
+              <div class="profile-form-row">
+                <div class="profile-form-group">
+                  <label class="form-label" for="pfSingleId">ID do Perfil *</label>
+                  <input type="number" class="modal-input" id="pfSingleId" placeholder="Ex: 376" min="1" />
+                </div>
+                <div class="profile-form-group" style="flex:2">
+                  <label class="form-label" for="pfSingleName">Nome (opcional)</label>
+                  <input type="text" class="modal-input" id="pfSingleName" placeholder="Ex: Conta Principal" />
+                </div>
+                <div class="profile-form-group" style="flex:2">
+                  <label class="form-label" for="pfSingleNotes">Anotações (opcional)</label>
+                  <input type="text" class="modal-input" id="pfSingleNotes" placeholder="Descrição do perfil" />
+                </div>
+              </div>
+              <button class="btn btn-primary" id="btnAddSingleProfile" style="margin-top:12px;">➕ Adicionar Perfil</button>
+            </div>
+
+            <!-- Aba: em massa -->
+            <div id="ptabContentBulk" class="ptab-content" style="display:none;">
+              <div class="profile-form-group">
+                <label class="form-label" for="pfBulkIds">IDs dos Perfis *</label>
+                <textarea
+                  class="modal-input"
+                  id="pfBulkIds"
+                  placeholder="Cole aqui os IDs separados por vírgula, espaço ou quebra de linha.&#10;Exemplo: 376, 377, 378, 400"
+                  rows="5"
+                  style="resize:vertical; font-family: var(--font-mono); font-size:13px;"
+                ></textarea>
+                <div class="form-hint">💡 Exemplo: <code>376, 377, 378</code> ou um ID por linha.</div>
+              </div>
+              <button class="btn btn-primary" id="btnAddBulkProfiles" style="margin-top:12px;">⚡ Adicionar em Massa</button>
+            </div>
+
+          </div>
+        </article>
+
+        <!-- Tabela de perfis cadastrados -->
+        <article class="card" style="margin-top:16px;" aria-label="Lista de perfis">
+          <div class="card-header">
+            <div class="card-title-group">
+              <div class="card-icon" style="background: var(--blue-soft, #1e3a5f);" aria-hidden="true">📄</div>
+              <div>
+                <div class="card-title">Perfis Cadastrados</div>
+                <div class="card-subtitle">Todos os perfis do IxBrowser registrados no dashboard</div>
+              </div>
+            </div>
+            <button class="toolbar-btn" id="btnRefreshProfiles" aria-label="Atualizar lista de perfis">🔄 Atualizar</button>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div id="profilesTableWrapper">
+              <div class="profile-empty-state" id="profilesEmptyState">
+                <div class="empty-icon">👤</div>
+                <div class="empty-title">Nenhum perfil cadastrado</div>
+                <div class="empty-desc">Use o formulário acima para adicionar perfis do IxBrowser.</div>
+              </div>
+              <table class="profiles-table" id="profilesTable" style="display:none;">
+                <thead>
+                  <tr>
+                    <th>ID do Perfil</th>
+                    <th>Nome</th>
+                    <th>Anotações</th>
+                    <th>Cadastrado em</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="profilesTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </article>
+
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════════ -->
+      <!-- SEÇÃO: LOGS                                                        -->
+      <!-- ══════════════════════════════════════════════════════════════════ -->
+      <section id="sectionLogs" class="section-page">
+
+        <article class="card log-card" aria-label="Terminal de logs global">
+          <div class="card-header">
+            <div class="card-title-group">
+              <div class="card-icon" style="background: var(--green-soft);" aria-hidden="true">🖥</div>
+              <div>
+                <div class="card-title" style="display:flex; align-items:center; gap:8px;">
+                  Terminal Global
+                  <span class="log-counter" id="logCounter" aria-label="Número de logs">0</span>
+                </div>
+                <div class="card-subtitle">Logs de todos os bots em tempo real</div>
+              </div>
+            </div>
+            <div class="log-toolbar">
+              <select class="toolbar-select" id="logBotFilter" aria-label="Filtrar por bot">
+                <option value="all">Todos os bots</option>
+              </select>
+              <button class="toolbar-btn" id="btnClearLogs" aria-label="Limpar logs">🗑 Limpar</button>
+            </div>
+          </div>
+
+          <div class="card-body">
+            <div class="log-terminal" id="logTerminal" role="log" aria-live="polite" aria-label="Terminal de logs">
+              <div class="log-empty">
+                <span class="empty-icon" aria-hidden="true">🖥</span>
+                <span>Aguardando logs dos bots...</span>
+              </div>
+            </div>
+          </div>
+        </article>
+
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════════ -->
+      <!-- SEÇÃO: CONFIGURAÇÕES                                               -->
+      <!-- ══════════════════════════════════════════════════════════════════ -->
+      <section id="sectionSettings" class="section-page">
+
+        <article class="card" aria-label="Informações do sistema">
+          <div class="card-header">
+            <div class="card-title-group">
+              <div class="card-icon" style="background: var(--yellow-soft);" aria-hidden="true">⚙️</div>
+              <div>
+                <div class="card-title">Informações do Sistema</div>
+                <div class="card-subtitle">Dados da conexão e configuração</div>
+              </div>
+            </div>
+          </div>
+          <div class="card-body" style="padding: 16px 22px;">
+            <div class="profile-info-grid" style="grid-template-columns: repeat(2, 1fr);">
+              <div class="info-item">
+                <div class="info-label">Socket ID</div>
+                <div class="info-value accent" id="settSocketId">—</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Motor de Automação</div>
+                <div class="info-value">Puppeteer + Socket.io</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Servidor</div>
+                <div class="info-value" id="settServer">localhost:3000</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">API REST Bots</div>
+                <div class="info-value">POST /api/bots/register</div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="card" style="margin-top: 16px;" aria-label="Como adicionar um novo bot">
+          <div class="card-header">
+            <div class="card-title-group">
+              <div class="card-icon" style="background: var(--purple-soft);" aria-hidden="true">📖</div>
+              <div>
+                <div class="card-title">Como Adicionar um Novo Bot</div>
+                <div class="card-subtitle">Instruções rápidas</div>
+              </div>
+            </div>
+          </div>
+          <div class="card-body" style="padding: 16px 22px;">
+            <ol class="setup-steps">
+              <li>Copie a pasta <code>bot/</code> para o PC ou VPS onde o ixBrowser está instalado.</li>
+              <li>Edite <code>bot/config.js</code> e defina <code>DASHBOARD_API_URL</code> com o endereço deste servidor.</li>
+              <li>Execute <code>npm install</code> uma única vez na pasta <code>bot/</code>.</li>
+              <li>Inicie o bot com <code>node bot.js</code>.</li>
+              <li>O bot aparecerá automaticamente neste painel!</li>
+            </ol>
+          </div>
+        </article>
+
+      </section>
+
+    </div><!-- /content -->
+  </main>
+
+  <!-- ── Modal: Controle do Bot ──────────────────────────────────────────── -->
+  <div class="modal-overlay" id="botModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title" id="modalTitle">Controle do Bot</div>
+          <div class="modal-subtitle" id="modalSubtitle">—</div>
+        </div>
+        <button class="modal-close" id="modalClose" aria-label="Fechar modal">✕</button>
+      </div>
+      <div class="modal-body">
+
+        <!-- Info do bot -->
+        <div class="modal-info-grid" id="modalInfoGrid"></div>
+
+        <!-- Controle de perfil -->
+        <div class="modal-section">
+          <div class="modal-section-title">Controlar Perfil</div>
+          <div class="modal-command-row">
+            <input
+              type="number"
+              class="modal-input"
+              id="modalProfileId"
+              placeholder="ID do Perfil (ex: 376)"
+              min="1"
+            />
+            <button class="btn btn-primary" id="modalBtnOpen">▶ Abrir</button>
+            <button class="btn btn-danger" id="modalBtnClose">■ Fechar</button>
+          </div>
+          <button class="btn btn-secondary" id="modalBtnCloseAll" style="margin-top:8px;">
+            ⏹ Fechar Todos os Perfis
+          </button>
+        </div>
+
+        <!-- Navegação -->
+        <div class="modal-section">
+          <div class="modal-section-title">Navegar para URL</div>
+          <div class="modal-command-row">
+            <input
+              type="number"
+              class="modal-input"
+              id="modalNavProfileId"
+              placeholder="ID do Perfil"
+              style="max-width:140px;"
+            />
+            <input
+              type="text"
+              class="modal-input"
+              id="modalNavUrl"
+              placeholder="https://exemplo.com"
+              style="flex:1;"
+            />
+            <button class="btn btn-primary" id="modalBtnNavigate">🌐 Ir</button>
+          </div>
+        </div>
+
+        <!-- Logs do bot -->
+        <div class="modal-section">
+          <div class="modal-section-title">Logs deste Bot</div>
+          <div class="log-terminal modal-log-terminal" id="modalLogTerminal">
+            <div class="log-empty">
+              <span>Nenhum log...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Perfis Atribuídos -->
+        <div class="modal-section">
+          <div class="modal-section-title" style="display:flex; align-items:center; justify-content:space-between;">
+            <span>👤 Perfis que este Bot Controla</span>
+            <button class="btn btn-primary" id="modalBtnSaveAssignments" style="font-size:12px; padding:5px 12px;">💾 Salvar</button>
+          </div>
+          <div id="modalAssignmentsList" class="modal-assignments-list">
+            <div class="log-empty"><span>Nenhum perfil cadastrado. Adicione perfis na aba <strong>Perfis</strong>.</span></div>
+          </div>
+        </div>
+
+      </div><!-- /modal-body -->
+    </div><!-- /modal -->
+  </div><!-- /modal-overlay -->
+
+  <!-- Socket.io (injetado pelo servidor Express) -->
+  <script src="/socket.io/socket.io.js"></script>
+  <!-- Módulo de conexão socket -->
+  <script src="/js/socket.js"></script>
+  <!-- Lógica do dashboard (deve ser carregado após socket.js) -->
+  <script src="/js/dashboard.js"></script>
+  <!-- Gerenciamento de perfis -->
+  <script src="/js/profiles.js"></script>
+
+</body>
+</html>
+
