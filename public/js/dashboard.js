@@ -11,7 +11,7 @@ const state = {
   bots: {},        // { botId: botData }
   logs: [],        // Array de logs globais
   logCount: 0,
-  activeBotModal: null, // botId do modal aberto
+  activeBotModal: null, // botId da página de controle aberta
   logFilter: 'all',
 };
 
@@ -37,15 +37,17 @@ document.querySelectorAll('.nav-item[data-section]').forEach((item) => {
     item.classList.add('active');
 
     document.querySelectorAll('.section-page').forEach((s) => s.classList.remove('active'));
-    const target = document.getElementById(`section${section.charAt(0).toUpperCase() + section.slice(1)}`);
+    const sectionKey = section.charAt(0).toUpperCase() + section.slice(1);
+    const target = document.getElementById(`section${sectionKey}`);
     if (target) target.classList.add('active');
 
     // Atualiza header
     const titles = {
-      bots:     ['Bots Registrados', 'Controle múltiplos bots em tempo real'],
-      profiles: ['Perfis do IxBrowser', 'Gerencie e atribua perfis aos seus bots'],
-      logs:     ['Terminal Global', 'Logs de todos os bots em tempo real'],
-      settings: ['Configurações', 'Informações do sistema'],
+      bots:       ['Bots Registrados', 'Controle múltiplos bots em tempo real'],
+      profiles:   ['Perfis do IxBrowser', 'Gerencie e atribua perfis aos seus bots'],
+      logs:       ['Terminal Global', 'Logs de todos os bots em tempo real'],
+      settings:   ['Configurações', 'Informações do sistema'],
+      botControl: ['Controle do Bot', 'Configurar, vincular perfis e enviar comandos'],
     };
     if (titles[section]) {
       document.getElementById('headerTitle').textContent = titles[section][0];
@@ -147,9 +149,12 @@ document.addEventListener('bot:offline', (e) => {
   renderBotGrid();
   updateStats();
 
-  // Fecha modal se for o bot que ficou offline
+  // Atualiza a página de controle se for o bot em questão
   if (state.activeBotModal === botId) {
-    appendModalLog('error', `Bot ficou offline. Motivo: ${reason || 'desconexão'}`);
+    appendCtrlLog('error', `Bot ficou offline. Motivo: ${reason || 'desconexão'}`);
+    // Atualiza badge de status no breadcrumb
+    const badge = document.getElementById('botCtrlStatusBadge');
+    if (badge) { badge.className = 'bot-status-badge offline'; badge.textContent = formatStatus('offline'); }
   }
 
   // Toast de notificação
@@ -175,9 +180,9 @@ document.addEventListener('bot:status', (e) => {
   }
   updateStats();
 
-  // Atualiza modal se for o bot em questão
+  // Atualiza página de controle se for o bot em questão
   if (state.activeBotModal === botId) {
-    appendModalLog(`info`, `Perfil #${profileId} → status: ${status}${currentUrl ? ' | ' + currentUrl : ''}`);
+    appendCtrlLog(`info`, `Perfil #${profileId} → status: ${status}${currentUrl ? ' | ' + currentUrl : ''}`);
   }
 });
 
@@ -333,9 +338,9 @@ document.addEventListener('bot:log', (e) => {
   const { botId, level, message, timestamp } = e.detail;
   appendLog(botId, level, message, timestamp);
 
-  // Se o modal está aberto para este bot, atualiza o log do modal também
+  // Se a página de controle está aberta para este bot, atualiza o log também
   if (state.activeBotModal === botId) {
-    appendModalLog(level, message, timestamp);
+    appendCtrlLog(level, message, timestamp);
   }
 });
 
@@ -433,111 +438,235 @@ document.getElementById('btnClearLogs')?.addEventListener('click', () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// MODAL DE CONTROLE DO BOT
+// PÁGINA DE CONTROLE DO BOT (substitui o modal)
 // ══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Navega para a página de controle do bot (substitui openBotModal).
+ */
 function openBotModal(botId) {
   const bot = state.bots[botId];
   if (!bot) return;
 
   state.activeBotModal = botId;
-  // Exposto globalmente para uso pelo profiles.js
   window._activeBotModal = botId;
 
-  document.getElementById('modalTitle').textContent = `Controlar: ${bot.name || 'Bot'}`;
-  document.getElementById('modalSubtitle').textContent = `ID: ${botId}`;
+  // Atualiza breadcrumb
+  const avatar = document.getElementById('botCtrlAvatar');
+  const nameEl = document.getElementById('botCtrlName');
+  const idEl   = document.getElementById('botCtrlId');
+  const badge  = document.getElementById('botCtrlStatusBadge');
+  if (avatar) avatar.textContent = bot.status === 'online' ? '🟢' : '⭕';
+  if (nameEl) nameEl.textContent = bot.name || 'Bot';
+  if (idEl)   idEl.textContent   = botId;
+  if (badge)  { badge.className = `bot-status-badge ${bot.status}`; badge.textContent = formatStatus(bot.status); }
 
-  updateModalInfo(bot);
+  // Atualiza grid de info
+  updateBotCtrlInfo(bot);
 
-  // Limpa logs do modal
-  const modalLog = document.getElementById('modalLogTerminal');
-  if (modalLog) {
-    modalLog.innerHTML = '<div class="log-empty"><span>Aguardando ações...</span></div>';
-  }
+  // Limpa log da página
+  const logEl = document.getElementById('ctrlLogTerminal');
+  if (logEl) logEl.innerHTML = '<div class="log-empty"><span>Aguardando ações...</span></div>';
 
-  document.getElementById('botModal').classList.add('visible');
+  // Navega para a seção
+  document.querySelectorAll('.nav-item').forEach((n) => n.classList.remove('active'));
+  document.getElementById('navBotControl')?.classList.add('active');
 
-  // Carrega lista de perfis atribuídos ao bot (em profiles.js)
+  document.querySelectorAll('.section-page').forEach((s) => s.classList.remove('active'));
+  document.getElementById('sectionBotControl')?.classList.add('active');
+
+  document.getElementById('headerTitle').textContent    = `Controle: ${bot.name || 'Bot'}`;
+  document.getElementById('headerSubtitle').textContent = `ID: ${botId}`;
+
+  // Carrega lista de perfis atribuídos (em profiles.js)
   if (typeof window.profiles_onModalOpen === 'function') {
     window.profiles_onModalOpen(botId);
   }
 }
 
-function updateModalInfo(bot) {
+/**
+ * Volta para a lista de bots.
+ */
+function closeBotControl() {
+  state.activeBotModal = null;
+  window._activeBotModal = null;
+
+  document.querySelectorAll('.nav-item').forEach((n) => n.classList.remove('active'));
+  document.getElementById('navBots')?.classList.add('active');
+
+  document.querySelectorAll('.section-page').forEach((s) => s.classList.remove('active'));
+  document.getElementById('sectionBots')?.classList.add('active');
+
+  document.getElementById('headerTitle').textContent    = 'Bots Registrados';
+  document.getElementById('headerSubtitle').textContent = 'Controle múltiplos bots em tempo real';
+}
+
+// Botão Voltar
+document.getElementById('btnBackToBots')?.addEventListener('click', closeBotControl);
+
+function updateBotCtrlInfo(bot) {
   if (!bot) return;
-  const grid = document.getElementById('modalInfoGrid');
+  const grid = document.getElementById('botCtrlInfoGrid');
   if (!grid) return;
   grid.innerHTML = `
-    <div class="modal-info-item">
-      <span class="modal-info-label">Status</span>
-      <span class="modal-info-value"><span class="bot-status-badge ${bot.status}">${formatStatus(bot.status)}</span></span>
+    <div class="botctrl-info-item">
+      <span class="botctrl-info-label">Status</span>
+      <span class="botctrl-info-value"><span class="bot-status-badge ${bot.status}">${formatStatus(bot.status)}</span></span>
     </div>
-    <div class="modal-info-item">
-      <span class="modal-info-label">IP</span>
-      <span class="modal-info-value">${bot.ip || '—'}</span>
+    <div class="botctrl-info-item">
+      <span class="botctrl-info-label">IP</span>
+      <span class="botctrl-info-value">${bot.ip || '—'}</span>
     </div>
-    <div class="modal-info-item">
-      <span class="modal-info-label">Último sinal</span>
-      <span class="modal-info-value">${bot.last_seen || '—'}</span>
+    <div class="botctrl-info-item">
+      <span class="botctrl-info-label">Último sinal</span>
+      <span class="botctrl-info-value">${bot.last_seen || '—'}</span>
     </div>
-    <div class="modal-info-item">
-      <span class="modal-info-label">Bot ID</span>
-      <span class="modal-info-value" style="font-family: var(--font-mono); font-size:11px;">${bot.bot_id}</span>
+    <div class="botctrl-info-item">
+      <span class="botctrl-info-label">Bot ID</span>
+      <span class="botctrl-info-value" style="font-family:var(--font-mono);font-size:11px;">${bot.bot_id}</span>
     </div>
   `;
 }
 
-// Fechar modal
-document.getElementById('modalClose')?.addEventListener('click', closeModal);
-document.getElementById('botModal')?.addEventListener('click', (e) => {
-  if (e.target === document.getElementById('botModal')) closeModal();
-});
+// ── Log da página de controle ──────────────────────────────────────────────
 
-function closeModal() {
-  document.getElementById('botModal').classList.remove('visible');
-  state.activeBotModal = null;
-  window._activeBotModal = null;
+function appendCtrlLog(level, message, timestamp) {
+  const terminal = document.getElementById('ctrlLogTerminal');
+  if (!terminal) return;
+  terminal.querySelector('.log-empty')?.remove();
+
+  const entry = document.createElement('div');
+  entry.className = `log-entry ${level || 'info'}`;
+  const ts = timestamp || new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  entry.innerHTML = `
+    <span class="log-ts">${ts}</span>
+    <span class="log-level-badge ${level}">${level || 'info'}</span>
+    <span class="log-msg">${escapeHtml(message)}</span>
+  `;
+  terminal.appendChild(entry);
+  terminal.scrollTop = terminal.scrollHeight;
 }
 
-// ── Comandos do Modal ────────────────────────────────────────────────────────
+// Mantém compatibilidade com profiles.js que chama appendModalLog
+function appendModalLog(level, message, timestamp) {
+  appendCtrlLog(level, message, timestamp);
+}
 
-function sendCommand(command, payload) {
-  if (!state.activeBotModal) return;
+// Limpar log
+document.getElementById('ctrlBtnClearLog')?.addEventListener('click', () => {
+  const t = document.getElementById('ctrlLogTerminal');
+  if (t) t.innerHTML = '<div class="log-empty"><span>Logs limpos.</span></div>';
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CONTROLES START / PAUSE DO BOT
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Estado local do bot nesta sessão
+const botRunState = { running: false };
+
+/**
+ * Atualiza o visual dos botões e o indicador de estado.
+ * @param {'idle'|'running'|'pausing'} status
+ */
+function setBotRunUI(status) {
+  const dot   = document.getElementById('botRunDot');
+  const label = document.getElementById('botRunLabel');
+  const btnStart = document.getElementById('btnBotStart');
+  const btnPause = document.getElementById('btnBotPause');
+  if (!dot || !label || !btnStart || !btnPause) return;
+
+  dot.className = `run-state-dot ${status}`;
+
+  if (status === 'running') {
+    label.textContent    = 'Rodando';
+    btnStart.disabled    = true;
+    btnPause.disabled    = false;
+    botRunState.running  = true;
+  } else if (status === 'pausing') {
+    label.textContent    = 'Pausando…';
+    btnStart.disabled    = true;
+    btnPause.disabled    = true;
+    botRunState.running  = false;
+  } else {
+    label.textContent    = 'Parado';
+    btnStart.disabled    = false;
+    btnPause.disabled    = true;
+    botRunState.running  = false;
+  }
+}
+
+/**
+ * Busca os perfis atribuídos ao bot ativo e envia o comando start_bot.
+ * O bot irá abrir todos esses perfis em série.
+ */
+document.getElementById('btnBotStart')?.addEventListener('click', async () => {
+  const botId = state.activeBotModal;
+  if (!botId) return;
+
+  // Busca os perfis atribuídos a este bot
+  let profileIds = [];
+  try {
+    const res  = await fetch(`/api/bots/${botId}/assignments`);
+    const data = await res.json();
+    if (data.ok) profileIds = data.assignments.map((a) => a.profile_id);
+  } catch (err) {
+    appendCtrlLog('error', `Erro ao buscar perfis atribuídos: ${err.message}`);
+    return;
+  }
+
+  if (profileIds.length === 0) {
+    appendCtrlLog('warn', '⚠ Nenhum perfil atribuído a este bot. Atribua perfis primeiro.');
+    return;
+  }
+
+  setBotRunUI('running');
+  appendCtrlLog('info', `▶ Iniciando bot com ${profileIds.length} perfil(is): ${profileIds.join(', ')}`);
+
   socket.emit('dashboard:sendCommand', {
-    botId: state.activeBotModal,
-    command,
-    payload,
+    botId,
+    command: 'start_bot',
+    payload: { profileIds },
   });
-  appendModalLog('info', `→ Enviando comando: ${command}${JSON.stringify(payload) !== '{}' ? ' ' + JSON.stringify(payload) : ''}`);
-}
-
-document.getElementById('modalBtnOpen')?.addEventListener('click', () => {
-  const profileId = parseInt(document.getElementById('modalProfileId').value);
-  if (!profileId) return alert('Digite um ID de perfil válido.');
-  sendCommand('open_profile', { profileId });
 });
 
-document.getElementById('modalBtnClose')?.addEventListener('click', () => {
-  const profileId = parseInt(document.getElementById('modalProfileId').value);
-  if (!profileId) return alert('Digite um ID de perfil válido.');
-  sendCommand('close_profile', { profileId });
+/**
+ * Envia o comando pause_bot: fecha todos os perfis abertos.
+ */
+document.getElementById('btnBotPause')?.addEventListener('click', () => {
+  const botId = state.activeBotModal;
+  if (!botId) return;
+
+  setBotRunUI('pausing');
+  appendCtrlLog('warn', '⏸ Pausando bot — fechando todos os perfis...');
+
+  socket.emit('dashboard:sendCommand', {
+    botId,
+    command: 'pause_bot',
+    payload: {},
+  });
 });
 
-document.getElementById('modalBtnCloseAll')?.addEventListener('click', () => {
-  sendCommand('close_all_profiles', {});
+// Reseta estado visual ao sair da página de controle
+const _origCloseBotControl = closeBotControl;
+// Sobrescreve para limpar estado
+window.closeBotControl = function () {
+  setBotRunUI('idle');
+  _origCloseBotControl();
+};
+
+// Escuta confirmação do bot via log para atualizar estado
+socket.on('bot:log', ({ botId, level, message }) => {
+  if (botId !== state.activeBotModal) return;
+  if (message.includes('⏹ Bot pausado') || message.includes('pause_bot concluído')) {
+    setBotRunUI('idle');
+  }
 });
 
-document.getElementById('modalBtnNavigate')?.addEventListener('click', () => {
-  const profileId = parseInt(document.getElementById('modalNavProfileId').value);
-  const url = document.getElementById('modalNavUrl').value.trim();
-  if (!profileId || !url) return alert('Preencha o ID do perfil e a URL.');
-  sendCommand('navigate', { profileId, url });
-});
 
-// ── Detalhes do bot ao abrir modal ───────────────────────────────────────────
 document.addEventListener('bot:detail', (e) => {
   const { logs = [] } = e.detail;
-  logs.slice(-50).forEach((l) => appendModalLog(l.level, l.message, l.created_at));
+  logs.slice(-50).forEach((l) => appendCtrlLog(l.level, l.message, l.created_at));
 });
 
 // ── Toast de notificação em tempo real ───────────────────────────────────────

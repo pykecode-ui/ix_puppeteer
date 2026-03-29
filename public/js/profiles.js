@@ -8,8 +8,10 @@
 
 // ── Estado dos perfis ─────────────────────────────────────────────────────────
 const profilesState = {
-  profiles: [],      // Array de ix_profiles
-  assignments: {},   // { botId: [profileIds] } — cache local
+  profiles: [],        // Array de ix_profiles
+  assignments: {},     // { botId: [profileIds] } — cache local (por bot)
+  allAssignments: {},  // { profileId: [{ botId, botName }] } — cache por perfil
+  _isBusy: false,      // Flag para evitar re-render durante operações (delete, edit)
 };
 
 // ── Inicialização ─────────────────────────────────────────────────────────────
@@ -24,6 +26,10 @@ document.addEventListener('DOMContentLoaded', () => {
 document.addEventListener('profiles:updated', (e) => {
   const { profiles = [] } = e.detail;
   profilesState.profiles = profiles;
+
+  // Se estamos no meio de uma operação (delete/edit), adia o re-render
+  if (profilesState._isBusy) return;
+
   renderProfilesTable();
   updateProfileStats();
   renderModalAssignments(); // Atualiza lista no modal se aberto
@@ -32,10 +38,14 @@ document.addEventListener('profiles:updated', (e) => {
 // ── Carregar perfis da API ────────────────────────────────────────────────────
 async function loadProfiles() {
   try {
-    const res = await fetch('/api/profiles');
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error);
-    profilesState.profiles = data.profiles || [];
+    const [profRes, assignRes] = await Promise.all([
+      fetch('/api/profiles'),
+      fetch('/api/profiles/all-assignments'),
+    ]);
+    const [profData, assignData] = await Promise.all([profRes.json(), assignRes.json()]);
+    if (!profData.ok) throw new Error(profData.error);
+    profilesState.profiles = profData.profiles || [];
+    profilesState.allAssignments = assignData.ok ? (assignData.assignments || {}) : {};
     renderProfilesTable();
     updateProfileStats();
   } catch (err) {
@@ -76,22 +86,28 @@ function renderProfilesTable() {
   table.style.display = 'table';
 
   body.innerHTML = profiles
-    .map(
-      (p) => `
-    <tr>
-      <td><span class="profile-id-badge">#${p.profile_id}</span></td>
-      <td>${escapeHtml(p.name) || '<span class="dim-text">—</span>'}</td>
-      <td>${escapeHtml(p.notes) || '<span class="dim-text">—</span>'}</td>
-      <td class="dim-text">${p.created_at || '—'}</td>
-      <td>
-        <div class="profile-actions">
-          <button class="toolbar-btn" onclick="editProfilePrompt(${p.profile_id})" title="Editar">✏️</button>
-          <button class="toolbar-btn danger" onclick="deleteProfile(${p.profile_id})" title="Remover">🗑️</button>
-        </div>
-      </td>
-    </tr>
-  `
-    )
+    .map((p) => {
+      const bots = profilesState.allAssignments[p.profile_id] || [];
+      const botBadges = bots.length > 0
+        ? bots.map((b) => `<span class="bot-link-badge" title="${b.botId}">${escapeHtml(b.botName)}</span>`).join('')
+        : '<span class="dim-text">Nenhum</span>';
+
+      return `
+        <tr>
+          <td><span class="profile-id-badge">#${p.profile_id}</span></td>
+          <td>${escapeHtml(p.name) || '<span class="dim-text">—</span>'}</td>
+          <td>${escapeHtml(p.notes) || '<span class="dim-text">—</span>'}</td>
+          <td class="dim-text">${p.created_at || '—'}</td>
+          <td><div class="bot-link-badges">${botBadges}</div></td>
+          <td>
+            <div class="profile-actions">
+              <button type="button" class="toolbar-btn accent" onclick="openAssignBotModal(${p.profile_id})" title="Vincular a Bot">🔗 Vincular</button>
+              <button type="button" class="toolbar-btn" onclick="editProfilePrompt(${p.profile_id})" title="Editar">✏️</button>
+              <button type="button" class="toolbar-btn danger" onclick="deleteProfile(${p.profile_id})" title="Remover">🗑️</button>
+            </div>
+          </td>
+        </tr>`;
+    })
     .join('');
 }
 
@@ -196,45 +212,129 @@ async function editProfilePrompt(profileId) {
   }
 }
 
+// ── Modal de Confirmação Customizado ──────────────────────────────────────────
+// Substitui o confirm() nativo — imune a Socket.io, re-renders e políticas do browser.
+
+/**
+ * Exibe um modal de confirmação estilizado e retorna uma Promise.
+ * @param {string} title - Título do modal
+ * @param {string} body  - Corpo da mensagem (aceita HTML)
+ * @param {string} [confirmText='🗑️ Remover'] - Texto do botão de confirmação
+ * @returns {Promise<boolean>} true se confirmado, false se cancelado
+ */
+function showConfirmModal(title, body, confirmText = '🗑️ Remover') {
+  return new Promise((resolve) => {
+    const overlay   = document.getElementById('confirmModalOverlay');
+    const titleEl   = document.getElementById('confirmModalTitle');
+    const bodyEl    = document.getElementById('confirmModalBody');
+    const btnCancel = document.getElementById('confirmModalCancel');
+    const btnConfirm = document.getElementById('confirmModalConfirm');
+    if (!overlay) { resolve(false); return; }
+
+    titleEl.textContent = title;
+    bodyEl.innerHTML = body;
+    btnConfirm.innerHTML = confirmText;
+    btnConfirm.disabled = false;
+
+    // Abre o modal
+    overlay.classList.add('visible');
+
+    // Cleanup: remove listeners antigos para evitar duplicatas
+    const newBtnCancel  = btnCancel.cloneNode(true);
+    const newBtnConfirm = btnConfirm.cloneNode(true);
+    btnCancel.parentNode.replaceChild(newBtnCancel, btnCancel);
+    btnConfirm.parentNode.replaceChild(newBtnConfirm, btnConfirm);
+
+    function close(result) {
+      overlay.classList.remove('visible');
+      resolve(result);
+    }
+
+    newBtnCancel.addEventListener('click', () => close(false));
+    newBtnConfirm.addEventListener('click', () => close(true));
+
+    // Fechar ao clicar no overlay (fora do modal)
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) close(false);
+    }, { once: true });
+
+    // Fechar com Escape
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        document.removeEventListener('keydown', onKey);
+        close(false);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+  });
+}
+
 // ── Remover perfil ────────────────────────────────────────────────────────────
 async function deleteProfile(profileId) {
-  if (!confirm(`Remover o perfil #${profileId}?\n\nIsso também removerá todas as atribuições a bots.`)) return;
+  // Bloqueia re-render via socket durante a operação
+  profilesState._isBusy = true;
+
+  const confirmed = await showConfirmModal(
+    'Remover Perfil',
+    `Tem certeza que deseja remover o perfil <strong>#${profileId}</strong>?<br><br>` +
+    `<span style="color:var(--text-muted);">Isso também removerá todas as atribuições deste perfil a bots.</span>`,
+    '🗑️ Remover'
+  );
+
+  if (!confirmed) {
+    profilesState._isBusy = false;
+    return;
+  }
+
+  // Desabilita botão enquanto processa
+  const btnConfirm = document.getElementById('confirmModalConfirm');
+  if (btnConfirm) { btnConfirm.disabled = true; btnConfirm.innerHTML = '⏳ Removendo...'; }
 
   try {
     const res = await fetch(`/api/profiles/${profileId}`, { method: 'DELETE' });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error);
     appendLog(null, 'warn', `Perfil #${profileId} removido.`);
-    await loadProfiles();
+    showToast('offline', `🗑️ Perfil #${profileId} removido com sucesso.`, null);
   } catch (err) {
     alert(`Erro ao remover perfil: ${err.message}`);
+  } finally {
+    profilesState._isBusy = false;
+    // Agora faz o re-render que foi adiado
+    renderProfilesTable();
+    updateProfileStats();
+    renderModalAssignments();
   }
 }
 
 // ── Gerenciar atribuições no modal do bot ─────────────────────────────────────
 
 /**
- * Renderiza a lista de checkboxes de perfis no modal do bot.
- * Chamado ao abrir o modal e quando profiles:updated chega.
+ * Renderiza perfis do bot em tabela (igual à aba Perfis).
+ * Chamado ao abrir a página de controle e quando profiles:updated chega.
  */
 async function renderModalAssignments() {
-  const container = document.getElementById('modalAssignmentsList');
+  const container = document.getElementById('ctrlAssignmentsList') || document.getElementById('modalAssignmentsList');
   if (!container) return;
 
-  const botId = window._activeBotModal; // Exposto pelo dashboard.js
+  const botId = window._activeBotModal;
   if (!botId) return;
 
   const profiles = profilesState.profiles;
 
   if (profiles.length === 0) {
-    container.innerHTML =
-      '<div class="log-empty"><span>Nenhum perfil cadastrado. Adicione perfis na aba <strong>Perfis</strong>.</span></div>';
+    container.innerHTML = `
+      <div class="profile-empty-state">
+        <div class="empty-icon">👤</div>
+        <div class="empty-title">Nenhum perfil cadastrado</div>
+        <div class="empty-desc">Adicione perfis na aba <strong>Perfis</strong>.</div>
+      </div>`;
+    updateAssignmentsCount();
     return;
   }
 
-  // Carrega as atribuições atuais do bot
+  // Carrega atribuições atuais do bot
   let currentAssignments = profilesState.assignments[botId] || [];
-
   try {
     const res = await fetch(`/api/bots/${botId}/assignments`);
     const data = await res.json();
@@ -245,65 +345,109 @@ async function renderModalAssignments() {
   } catch (_) {}
 
   container.innerHTML = `
-    <div class="assignments-grid">
-      ${profiles
-        .map(
-          (p) => `
-        <label class="assignment-checkbox-label" for="assign_${p.profile_id}">
-          <input
-            type="checkbox"
-            id="assign_${p.profile_id}"
-            class="assignment-checkbox"
-            value="${p.profile_id}"
-            ${currentAssignments.includes(p.profile_id) ? 'checked' : ''}
-          />
-          <span class="assignment-profile-info">
-            <span class="profile-id-badge">#${p.profile_id}</span>
-            <span class="assignment-profile-name">${escapeHtml(p.name) || 'Sem nome'}</span>
-            ${p.notes ? `<span class="assignment-profile-notes">${escapeHtml(p.notes)}</span>` : ''}
-          </span>
-        </label>
-      `
-        )
-        .join('')}
-    </div>
-    <div class="assignments-select-all">
-      <button class="toolbar-btn" id="btnSelectAllAssign">Selecionar Todos</button>
-      <button class="toolbar-btn" id="btnDeselectAllAssign">Desmarcar Todos</button>
-      <span class="assignments-count" id="assignmentsCount">${currentAssignments.length} selecionado(s)</span>
-    </div>
-  `;
+    <table class="profiles-table assign-table">
+      <thead>
+        <tr>
+          <th style="width:40px; text-align:center;">
+            <input type="checkbox" id="assignCheckAll" title="Selecionar todos" style="accent-color:var(--accent); cursor:pointer;" />
+          </th>
+          <th>ID</th>
+          <th>Nome</th>
+          <th>Anotações</th>
+          <th style="text-align:center;">Atribuído</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${profiles.map((p) => {
+          const checked = currentAssignments.includes(p.profile_id);
+          return `
+          <tr class="${checked ? 'assign-row-active' : ''}">
+            <td style="text-align:center;">
+              <input
+                type="checkbox"
+                class="assignment-checkbox"
+                id="assign_${p.profile_id}"
+                value="${p.profile_id}"
+                ${checked ? 'checked' : ''}
+                style="accent-color:var(--accent); cursor:pointer; width:15px; height:15px;"
+              />
+            </td>
+            <td><span class="profile-id-badge">#${p.profile_id}</span></td>
+            <td>${escapeHtml(p.name) || '<span class="dim-text">—</span>'}</td>
+            <td>${escapeHtml(p.notes) || '<span class="dim-text">—</span>'}</td>
+            <td style="text-align:center;">
+              <span class="assign-status-badge ${checked ? 'assigned' : 'unassigned'}">
+                ${checked ? '✔ Sim' : '— Não'}
+              </span>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
 
-  // Selecionar / desmarcar todos
+  // Checkbox "marcar todos" no cabeçalho
+  const checkAll = document.getElementById('assignCheckAll');
+  checkAll?.addEventListener('change', () => {
+    container.querySelectorAll('.assignment-checkbox').forEach((cb) => {
+      cb.checked = checkAll.checked;
+      _updateRowHighlight(cb);
+    });
+    updateAssignmentsCount();
+  });
+
+  // Highlight de linha + contador ao mudar checkbox individual
+  container.querySelectorAll('.assignment-checkbox').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      _updateRowHighlight(cb);
+      updateAssignmentsCount();
+    });
+  });
+
+  // Botões do header (Selecionar Todos / Desmarcar Todos)
   document.getElementById('btnSelectAllAssign')?.addEventListener('click', () => {
-    container.querySelectorAll('.assignment-checkbox').forEach((cb) => (cb.checked = true));
+    container.querySelectorAll('.assignment-checkbox').forEach((cb) => { cb.checked = true; _updateRowHighlight(cb); });
+    if (checkAll) checkAll.checked = true;
     updateAssignmentsCount();
   });
   document.getElementById('btnDeselectAllAssign')?.addEventListener('click', () => {
-    container.querySelectorAll('.assignment-checkbox').forEach((cb) => (cb.checked = false));
+    container.querySelectorAll('.assignment-checkbox').forEach((cb) => { cb.checked = false; _updateRowHighlight(cb); });
+    if (checkAll) checkAll.checked = false;
     updateAssignmentsCount();
   });
 
-  // Atualiza contador ao mudar checkbox
-  container.querySelectorAll('.assignment-checkbox').forEach((cb) => {
-    cb.addEventListener('change', updateAssignmentsCount);
-  });
+  updateAssignmentsCount();
+}
+
+function _updateRowHighlight(cb) {
+  const row = cb.closest('tr');
+  if (!row) return;
+  if (cb.checked) {
+    row.classList.add('assign-row-active');
+    const badge = row.querySelector('.assign-status-badge');
+    if (badge) { badge.className = 'assign-status-badge assigned'; badge.textContent = '✔ Sim'; }
+  } else {
+    row.classList.remove('assign-row-active');
+    const badge = row.querySelector('.assign-status-badge');
+    if (badge) { badge.className = 'assign-status-badge unassigned'; badge.textContent = '— Não'; }
+  }
 }
 
 function updateAssignmentsCount() {
-  const container = document.getElementById('modalAssignmentsList');
+  const container = document.getElementById('ctrlAssignmentsList') || document.getElementById('modalAssignmentsList');
   const checked = container?.querySelectorAll('.assignment-checkbox:checked').length || 0;
   const el = document.getElementById('assignmentsCount');
   if (el) el.textContent = `${checked} selecionado(s)`;
 }
 
 function setupProfileAssignmentsModal() {
-  // Salvar atribuições
-  document.getElementById('modalBtnSaveAssignments')?.addEventListener('click', async () => {
+  // Salvar atribuições (suporte aos dois botões: novo (ctrlBtn) e legado)
+  const saveBtn = document.getElementById('ctrlBtnSaveAssignments') || document.getElementById('modalBtnSaveAssignments');
+  saveBtn?.addEventListener('click', async () => {
     const botId = window._activeBotModal;
     if (!botId) return;
 
-    const checkboxes = document.querySelectorAll('#modalAssignmentsList .assignment-checkbox:checked');
+    const container = document.getElementById('ctrlAssignmentsList') || document.getElementById('modalAssignmentsList');
+    const checkboxes = container?.querySelectorAll('.assignment-checkbox:checked') || [];
     const profileIds = [...checkboxes].map((cb) => parseInt(cb.value));
 
     try {
@@ -326,6 +470,128 @@ function setupProfileAssignmentsModal() {
   });
 }
 
+// ── Modal: Vincular Perfil a Bot ──────────────────────────────────────────────
+
+let _assignBotTargetProfileId = null;
+
+/**
+ * Abre o modal de vínculo para um perfil específico.
+ * Lista todos os bots com checkbox marcado nos que já têm este perfil.
+ */
+async function openAssignBotModal(profileId) {
+  _assignBotTargetProfileId = profileId;
+  const overlay = document.getElementById('assignBotOverlay');
+  const label   = document.getElementById('assignBotProfileLabel');
+  const list    = document.getElementById('assignBotList');
+  if (!overlay || !list) return;
+
+  label.textContent = `#${profileId}`;
+  list.innerHTML = '<div class="log-empty"><span>Carregando bots...</span></div>';
+  overlay.style.display = 'flex';
+
+  try {
+    // Carrega todos os bots
+    const res  = await fetch('/api/bots');
+    const data = await res.json();
+    const bots = data.bots || [];
+
+    if (bots.length === 0) {
+      list.innerHTML = '<div class="log-empty"><span>Nenhum bot registrado no dashboard.</span></div>';
+      return;
+    }
+
+    // Para cada bot, verifica se este perfil já está atribuído
+    const checks = await Promise.all(
+      bots.map(async (bot) => {
+        const r = await fetch(`/api/bots/${bot.bot_id}/assignments`);
+        const d = await r.json();
+        const assigned = d.ok ? d.assignments.some((a) => a.profile_id === profileId) : false;
+        return { bot, assigned };
+      })
+    );
+
+    list.innerHTML = checks.map(({ bot, assigned }) => `
+      <label class="assign-bot-item" for="assignBot_${bot.bot_id}">
+        <input
+          type="checkbox"
+          id="assignBot_${bot.bot_id}"
+          class="assign-bot-checkbox"
+          value="${bot.bot_id}"
+          ${assigned ? 'checked' : ''}
+          style="accent-color:var(--accent); width:15px; height:15px; cursor:pointer; flex-shrink:0;"
+        />
+        <div class="assign-bot-info">
+          <span class="assign-bot-name">${escapeHtml(bot.name) || bot.bot_id.slice(0, 12)}</span>
+          <span class="assign-bot-status ${bot.status === 'online' ? 'online' : 'offline'}">
+            ${bot.status === 'online' ? '● Online' : '● Offline'}
+          </span>
+        </div>
+      </label>
+    `).join('');
+
+  } catch (err) {
+    list.innerHTML = `<div class="log-empty"><span>Erro ao carregar bots: ${escapeHtml(err.message)}</span></div>`;
+  }
+}
+
+function closeAssignBotModal() {
+  _assignBotTargetProfileId = null;
+  document.getElementById('assignBotOverlay').style.display = 'none';
+}
+
+// Listeners do modal de vínculo
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('assignBotClose')?.addEventListener('click', closeAssignBotModal);
+  document.getElementById('assignBotCancel')?.addEventListener('click', closeAssignBotModal);
+  document.getElementById('assignBotOverlay')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeAssignBotModal();
+  });
+
+  document.getElementById('assignBotSave')?.addEventListener('click', async () => {
+    const profileId = _assignBotTargetProfileId;
+    if (!profileId) return;
+
+    const checkboxes = document.querySelectorAll('.assign-bot-checkbox');
+    const btn = document.getElementById('assignBotSave');
+    btn.disabled = true;
+    btn.textContent = 'Salvando...';
+
+    try {
+      // Para cada bot: adiciona ou remove o perfil conforme checkbox
+      for (const cb of checkboxes) {
+        const botId = cb.value;
+        // Carrega assignments atuais do bot
+        const r = await fetch(`/api/bots/${botId}/assignments`);
+        const d = await r.json();
+        let current = d.ok ? d.assignments.map((a) => a.profile_id) : [];
+
+        if (cb.checked && !current.includes(profileId)) {
+          current = [...current, profileId];
+        } else if (!cb.checked && current.includes(profileId)) {
+          current = current.filter((id) => id !== profileId);
+        } else {
+          continue; // Sem mudança
+        }
+
+        await fetch(`/api/bots/${botId}/assignments`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profileIds: current }),
+        });
+      }
+
+      showToast('online', `🔗 Vínculos do perfil #${profileId} atualizados!`, null);
+      closeAssignBotModal();
+      await loadProfiles(); // Recarrega tabela com novos badges
+    } catch (err) {
+      alert(`Erro ao salvar vínculos: ${err.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '💾 Salvar Vínculos';
+    }
+  });
+});
+
 // Expõe para uso pelo dashboard.js ao abrir o modal
 window.profiles_onModalOpen = function (botId) {
   renderModalAssignments();
@@ -334,3 +600,4 @@ window.profiles_onModalOpen = function (botId) {
 // Expõe funções globais usadas no onclick inline da tabela
 window.editProfilePrompt = editProfilePrompt;
 window.deleteProfile = deleteProfile;
+window.openAssignBotModal = openAssignBotModal;

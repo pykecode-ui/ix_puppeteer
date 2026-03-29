@@ -7,9 +7,36 @@
 
 const { Router } = require('express');
 const models = require('../db/models');
+const { getDB } = require('../db/database');
 
 function createProfilesRouter(io) {
   const router = Router();
+
+  // ─── GET /api/profiles/all-assignments ───────────────────────────────────
+  // IMPORTANTE: Essa rota DEVE vir ANTES de /profiles/:profileId
+  // para não ser capturada pelo parâmetro dinâmico.
+  // Retorna mapa: { profileId: [{ botId, botName }] } para todos os perfis.
+  router.get('/profiles/all-assignments', (req, res) => {
+    try {
+      const rows = getDB().prepare(`
+        SELECT bpa.profile_id, bpa.bot_id, b.name AS bot_name
+        FROM bot_profile_assignments bpa
+        LEFT JOIN bots b ON b.bot_id = bpa.bot_id
+        ORDER BY bpa.profile_id ASC
+      `).all();
+
+      // Agrupa por profile_id
+      const map = {};
+      for (const row of rows) {
+        if (!map[row.profile_id]) map[row.profile_id] = [];
+        map[row.profile_id].push({ botId: row.bot_id, botName: row.bot_name || row.bot_id.slice(0, 8) });
+      }
+
+      return res.json({ ok: true, assignments: map });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+  });
 
   // ─── GET /api/profiles ────────────────────────────────────────────────────
   // Retorna todos os perfis cadastrados no dashboard.
@@ -108,7 +135,10 @@ function createProfilesRouter(io) {
     }
   });
 
+  // (Rota /api/profiles/all-assignments movida para o topo do router)
+
   // ─── GET /api/bots/:botId/assignments ────────────────────────────────────
+
   // Retorna os perfis atribuídos a um bot específico.
   router.get('/bots/:botId/assignments', (req, res) => {
     try {

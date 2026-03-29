@@ -146,6 +146,45 @@ const COMMANDS = {
     return { ok: true, profileId, currentUrl };
   },
 
+  /**
+   * Inicia o bot: abre todos os perfis da lista em série.
+   * payload: { profileIds: number[] }
+   */
+  async start_bot({ profileIds = [] }) {
+    if (profileIds.length === 0) {
+      log('warn', '⚠️ start_bot: nenhum perfil recebido.');
+      return { ok: false, reason: 'no_profiles' };
+    }
+
+    log('info', `▶ Iniciando bot com ${profileIds.length} perfil(is): ${profileIds.join(', ')}`);
+
+    const results = [];
+    for (const profileId of profileIds) {
+      try {
+        const r = await COMMANDS.open_profile({ profileId });
+        results.push({ profileId, ok: true, ...r });
+      } catch (err) {
+        log('error', `❌ Falha ao abrir perfil #${profileId}: ${err.message}`);
+        results.push({ profileId, ok: false, error: err.message });
+      }
+    }
+
+    const ok = results.filter((r) => r.ok).length;
+    log('success', `✅ start_bot concluído: ${ok}/${profileIds.length} perfis abertos.`);
+    return { ok: true, results };
+  },
+
+  /**
+   * Pausa o bot: fecha todos os perfis abertos.
+   * payload: {}
+   */
+  async pause_bot() {
+    log('warn', '⏸ Pausando bot — fechando todos os perfis abertos...');
+    await COMMANDS.close_all_profiles();
+    log('success', '⏹ Bot pausado com sucesso.');
+    return { ok: true };
+  },
+
 };
 
 /**

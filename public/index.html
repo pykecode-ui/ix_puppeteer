@@ -48,6 +48,12 @@
         <span class="nav-icon" aria-hidden="true">⚙️</span>
         <span>Configurações</span>
       </a>
+
+      <!-- Item oculto de controle do bot — aparece no breadcrumb do header -->
+      <a class="nav-item" id="navBotControl" href="#" role="menuitem" data-section="botControl" style="display:none;">
+        <span class="nav-icon" aria-hidden="true">⚡</span>
+        <span>Controlar Bot</span>
+      </a>
     </nav>
 
     <!-- Status da conexão Socket.io -->
@@ -243,6 +249,7 @@
                     <th>Nome</th>
                     <th>Anotações</th>
                     <th>Cadastrado em</th>
+                    <th>Bots Vinculados</th>
                     <th>Ações</th>
                   </tr>
                 </thead>
@@ -351,89 +358,150 @@
 
       </section>
 
+      <!-- ══════════════════════════════════════════════════════════════════ -->
+      <!-- SEÇÃO: CONTROLE DO BOT (full page)                                -->
+      <!-- ══════════════════════════════════════════════════════════════════ -->
+      <section id="sectionBotControl" class="section-page">
+
+        <!-- Breadcrumb / Voltar -->
+        <div class="botctrl-breadcrumb">
+          <button class="btn-back-bots" id="btnBackToBots" aria-label="Voltar para lista de bots">
+            ← Voltar
+          </button>
+          <div class="botctrl-bot-tag">
+            <span id="botCtrlAvatar">🤖</span>
+            <span id="botCtrlName">Bot</span>
+            <span class="bot-status-badge" id="botCtrlStatusBadge">—</span>
+          </div>
+          <div class="botctrl-id" id="botCtrlId">—</div>
+        </div>
+
+        <!-- Layout coluna única -->
+        <div class="botctrl-layout-single">
+
+          <!-- Info do Bot -->
+          <article class="card" aria-label="Informações do bot">
+            <div class="card-header">
+              <div class="card-title-group">
+                <div class="card-icon" style="background:var(--accent-soft)" aria-hidden="true">📊</div>
+                <div>
+                  <div class="card-title">Informações do Bot</div>
+                  <div class="card-subtitle">Status e dados de conexão</div>
+                </div>
+              </div>
+              <!-- Controles Start / Pause -->
+              <div class="botctrl-run-controls">
+                <span class="botctrl-run-state" id="botRunState">
+                  <span class="run-state-dot idle" id="botRunDot"></span>
+                  <span id="botRunLabel">Parado</span>
+                </span>
+                <button class="btn-bot-start" id="btnBotStart" title="Iniciar: abre todos os perfis atribuídos">
+                  ▶ Start
+                </button>
+                <button class="btn-bot-pause" id="btnBotPause" title="Pausar: fecha todos os perfis abertos" disabled>
+                  ⏸ Pausar
+                </button>
+              </div>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div class="botctrl-info-grid" id="botCtrlInfoGrid"></div>
+            </div>
+          </article>
+
+          <!-- Perfis Atribuídos (tabela grande) -->
+          <article class="card" aria-label="Perfis atribuídos">
+            <div class="card-header">
+              <div class="card-title-group">
+                <div class="card-icon" style="background:var(--purple-soft)" aria-hidden="true">👤</div>
+                <div>
+                  <div class="card-title">Perfis deste Bot</div>
+                  <div class="card-subtitle">Selecione os perfis que este bot vai controlar</div>
+                </div>
+              </div>
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span class="assignments-count" id="assignmentsCount" style="font-size:12px;">0 selecionado(s)</span>
+                <button class="toolbar-btn" id="btnSelectAllAssign">Selecionar Todos</button>
+                <button class="toolbar-btn" id="btnDeselectAllAssign">Desmarcar Todos</button>
+                <button class="btn btn-primary" id="ctrlBtnSaveAssignments" style="font-size:12px; padding:6px 14px;">💾 Salvar</button>
+              </div>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div id="ctrlAssignmentsList">
+                <div class="profile-empty-state">
+                  <div class="empty-icon">👤</div>
+                  <div class="empty-title">Nenhum perfil cadastrado</div>
+                  <div class="empty-desc">Adicione perfis na aba <strong>Perfis</strong>.</div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <!-- Logs do Bot -->
+          <article class="card log-card botctrl-log-card" aria-label="Logs do bot">
+            <div class="card-header">
+              <div class="card-title-group">
+                <div class="card-icon" style="background:var(--green-soft)" aria-hidden="true">🖥</div>
+                <div>
+                  <div class="card-title">Logs deste Bot</div>
+                  <div class="card-subtitle">Saída em tempo real</div>
+                </div>
+              </div>
+              <button class="toolbar-btn" id="ctrlBtnClearLog">🗑 Limpar</button>
+            </div>
+            <div class="card-body">
+              <div class="log-terminal botctrl-log-terminal" id="ctrlLogTerminal">
+                <div class="log-empty"><span>Aguardando ações...</span></div>
+              </div>
+            </div>
+          </article>
+
+        </div><!-- /botctrl-layout-single -->
+
+      </section>
+
     </div><!-- /content -->
   </main>
 
-  <!-- ── Modal: Controle do Bot ──────────────────────────────────────────── -->
-  <div class="modal-overlay" id="botModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-    <div class="modal">
-      <div class="modal-header">
-        <div>
-          <div class="modal-title" id="modalTitle">Controle do Bot</div>
-          <div class="modal-subtitle" id="modalSubtitle">—</div>
-        </div>
-        <button class="modal-close" id="modalClose" aria-label="Fechar modal">✕</button>
+  <!-- Modal removido: agora é uma página inteira (sectionBotControl) -->
+
+  <!-- ── Modal de Confirmação Customizado ─────────────────────────────── -->
+  <div id="confirmModalOverlay" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle">
+    <div class="confirm-modal">
+      <div class="confirm-modal-header">
+        <div class="confirm-modal-icon" aria-hidden="true">⚠️</div>
+        <div class="confirm-modal-title" id="confirmModalTitle">Confirmar ação</div>
       </div>
-      <div class="modal-body">
+      <div class="confirm-modal-body" id="confirmModalBody">
+        Tem certeza que deseja continuar?
+      </div>
+      <div class="confirm-modal-footer">
+        <button type="button" class="confirm-btn-cancel" id="confirmModalCancel">Cancelar</button>
+        <button type="button" class="confirm-btn-delete" id="confirmModalConfirm">🗑️ Remover</button>
+      </div>
+    </div>
+  </div>
 
-        <!-- Info do bot -->
-        <div class="modal-info-grid" id="modalInfoGrid"></div>
-
-        <!-- Controle de perfil -->
-        <div class="modal-section">
-          <div class="modal-section-title">Controlar Perfil</div>
-          <div class="modal-command-row">
-            <input
-              type="number"
-              class="modal-input"
-              id="modalProfileId"
-              placeholder="ID do Perfil (ex: 376)"
-              min="1"
-            />
-            <button class="btn btn-primary" id="modalBtnOpen">▶ Abrir</button>
-            <button class="btn btn-danger" id="modalBtnClose">■ Fechar</button>
-          </div>
-          <button class="btn btn-secondary" id="modalBtnCloseAll" style="margin-top:8px;">
-            ⏹ Fechar Todos os Perfis
-          </button>
+  <!-- ── Modal: Vincular Perfil a Bot ──────────────────────────────────── -->
+  <div id="assignBotOverlay" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="assignBotTitle">
+    <div class="modal-box" style="max-width:480px;">
+      <div class="modal-header">
+        <div class="modal-title" id="assignBotTitle">🔗 Vincular Perfil a Bot</div>
+        <button class="modal-close" id="assignBotClose" aria-label="Fechar">✕</button>
+      </div>
+      <div class="modal-body" style="padding:20px;">
+        <p style="font-size:13px; color:var(--text-secondary); margin-bottom:16px;">
+          Selecione o bot ao qual o perfil <strong id="assignBotProfileLabel"></strong> será vinculado.
+        </p>
+        <div id="assignBotList" style="display:flex; flex-direction:column; gap:8px; max-height:280px; overflow-y:auto;">
+          <div class="log-empty"><span>Carregando bots...</span></div>
         </div>
-
-        <!-- Navegação -->
-        <div class="modal-section">
-          <div class="modal-section-title">Navegar para URL</div>
-          <div class="modal-command-row">
-            <input
-              type="number"
-              class="modal-input"
-              id="modalNavProfileId"
-              placeholder="ID do Perfil"
-              style="max-width:140px;"
-            />
-            <input
-              type="text"
-              class="modal-input"
-              id="modalNavUrl"
-              placeholder="https://exemplo.com"
-              style="flex:1;"
-            />
-            <button class="btn btn-primary" id="modalBtnNavigate">🌐 Ir</button>
-          </div>
-        </div>
-
-        <!-- Logs do bot -->
-        <div class="modal-section">
-          <div class="modal-section-title">Logs deste Bot</div>
-          <div class="log-terminal modal-log-terminal" id="modalLogTerminal">
-            <div class="log-empty">
-              <span>Nenhum log...</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Perfis Atribuídos -->
-        <div class="modal-section">
-          <div class="modal-section-title" style="display:flex; align-items:center; justify-content:space-between;">
-            <span>👤 Perfis que este Bot Controla</span>
-            <button class="btn btn-primary" id="modalBtnSaveAssignments" style="font-size:12px; padding:5px 12px;">💾 Salvar</button>
-          </div>
-          <div id="modalAssignmentsList" class="modal-assignments-list">
-            <div class="log-empty"><span>Nenhum perfil cadastrado. Adicione perfis na aba <strong>Perfis</strong>.</span></div>
-          </div>
-        </div>
-
-      </div><!-- /modal-body -->
-    </div><!-- /modal -->
-  </div><!-- /modal-overlay -->
+      </div>
+      <div class="modal-footer" style="justify-content:flex-end; gap:8px;">
+        <button class="btn btn-secondary" id="assignBotCancel">Cancelar</button>
+        <button class="btn btn-primary" id="assignBotSave">💾 Salvar Vínculos</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Socket.io (injetado pelo servidor Express) -->
   <script src="/socket.io/socket.io.js"></script>
