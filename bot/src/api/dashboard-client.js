@@ -154,6 +154,19 @@ function sendStatus(botId, statusData) {
   }
 }
 
+/**
+ * Notifica o dashboard que um perfil foi aberto, incrementando o open_count.
+ * Fire-and-forget: não bloqueia o fluxo do bot se falhar.
+ * @param {number|string} profileId
+ */
+async function notifyProfileOpen(profileId) {
+  try {
+    await http.post(`/api/profiles/${profileId}/open`);
+  } catch (_) {
+    // Silencia — não interrompe o fluxo do bot por falha de contagem
+  }
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // HEARTBEAT
 // ══════════════════════════════════════════════════════════════════════════════
@@ -221,6 +234,7 @@ module.exports = {
   connectSocket,
   sendLog,
   sendStatus,
+  notifyProfileOpen,
   sendOffline,
   startHeartbeat,
   stopHeartbeat,

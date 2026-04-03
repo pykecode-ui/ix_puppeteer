@@ -100,6 +100,32 @@ function createProfilesRouter(io) {
     }
   });
 
+  // ─── POST /api/profiles/:profileId/open ──────────────────────────────────
+  // Registra que o perfil foi aberto (incrementa open_count).
+  // Chamado pelo bot ou manualmente via API.
+  router.post('/profiles/:profileId/open', (req, res) => {
+    try {
+      const pid = parseInt(req.params.profileId);
+      const existing = models.getIxProfile(pid);
+      if (!existing) return res.status(404).json({ ok: false, error: 'Perfil não encontrado.' });
+
+      models.incrementIxProfileOpenCount(pid);
+      const updated = models.getIxProfile(pid);
+
+      // Notifica o dashboard em tempo real
+      io.emit('profiles:updated', { profiles: models.getAllIxProfiles() });
+
+      return res.json({
+        ok: true,
+        message: `Abertura registrada para o perfil #${pid}.`,
+        open_count: updated.open_count,
+        last_opened_at: updated.last_opened_at,
+      });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
   // ─── PUT /api/profiles/:profileId ────────────────────────────────────────
   // Atualiza nome e notas de um perfil.
   router.put('/profiles/:profileId', (req, res) => {

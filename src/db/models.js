@@ -376,6 +376,24 @@ function deleteIxProfile(profileId) {
   getDB().prepare('DELETE FROM ix_profiles WHERE profile_id = ?').run(profileId);
 }
 
+/**
+ * Incrementa o contador de aberturas de um perfil global e registra o timestamp.
+ * Deve ser chamado sempre que o bot abrir o perfil.
+ * @param {number} profileId
+ */
+function incrementIxProfileOpenCount(profileId) {
+  const now = nowBrasilia();
+  getDB()
+    .prepare(`
+      UPDATE ix_profiles
+      SET open_count = open_count + 1,
+          last_opened_at = ?,
+          updated_at = ?
+      WHERE profile_id = ?
+    `)
+    .run(now, now, profileId);
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // BOT PROFILE ASSIGNMENTS (quais perfis cada bot controla)
 // ══════════════════════════════════════════════════════════════════════════════
@@ -453,6 +471,7 @@ module.exports = {
   createIxProfiles,
   updateIxProfile,
   deleteIxProfile,
+  incrementIxProfileOpenCount,
   // Bot profile assignments
   getBotProfileAssignments,
   setBotProfileAssignments,

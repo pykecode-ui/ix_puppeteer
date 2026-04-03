@@ -52,12 +52,15 @@ const COMMANDS = {
     const profileData = await ixbrowser.openProfile(profileId);
     log('success', `✅ Perfil #${profileId} aberto. WebSocket: ${profileData.ws}`);
 
-    // 2. Conecta Puppeteer ao browser
+    // 2. Registra abertura no dashboard (incrementa open_count)
+    client.notifyProfileOpen(profileId);
+
+    // 3. Conecta Puppeteer ao browser
     const { page } = await puppeteerBot.connectToProfile(profileId, profileData.ws);
     const currentUrl = page.url() || 'about:blank';
     log('info', `🤖 Puppeteer conectado ao perfil #${profileId}. URL: ${currentUrl}`);
 
-    // 3. Notifica dashboard: aberto
+    // 4. Notifica dashboard: aberto
     client.sendStatus(BOT_ID, {
       profileId,
       status: 'open',

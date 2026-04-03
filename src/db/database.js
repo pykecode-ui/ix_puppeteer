@@ -134,10 +134,17 @@ function initDatabase() {
       profile_id  INTEGER NOT NULL UNIQUE,
       name        TEXT,
       notes       TEXT,
+      open_count  INTEGER NOT NULL DEFAULT 0,
+      last_opened_at TEXT,
       created_at  TEXT    NOT NULL,
       updated_at  TEXT    NOT NULL
     )
   `);
+
+  // Migração segura: adiciona colunas open_count e last_opened_at se não existirem
+  // (para bancos criados antes desta versão)
+  try { db.exec(`ALTER TABLE ix_profiles ADD COLUMN open_count INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
+  try { db.exec(`ALTER TABLE ix_profiles ADD COLUMN last_opened_at TEXT`); } catch (_) {}
 
   // Tabela: atribuição de perfis a bots (quais perfis um bot irá controlar)
   db.exec(`

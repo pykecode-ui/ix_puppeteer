@@ -92,6 +92,11 @@ function renderProfilesTable() {
         ? bots.map((b) => `<span class="bot-link-badge" title="${b.botId}">${escapeHtml(b.botName)}</span>`).join('')
         : '<span class="dim-text">Nenhum</span>';
 
+      const openCount = p.open_count || 0;
+      const openBadge = openCount > 0
+        ? `<span class="open-count-badge" title="Última abertura: ${p.last_opened_at || '—'}">${openCount}x</span>`
+        : `<span class="dim-text">0</span>`;
+
       return `
         <tr>
           <td><span class="profile-id-badge">#${p.profile_id}</span></td>
@@ -99,6 +104,7 @@ function renderProfilesTable() {
           <td>${escapeHtml(p.notes) || '<span class="dim-text">—</span>'}</td>
           <td class="dim-text">${p.created_at || '—'}</td>
           <td><div class="bot-link-badges">${botBadges}</div></td>
+          <td style="text-align:center;">${openBadge}</td>
           <td>
             <div class="profile-actions">
               <button type="button" class="toolbar-btn accent" onclick="openAssignBotModal(${p.profile_id})" title="Vincular a Bot">🔗 Vincular</button>
@@ -355,11 +361,16 @@ async function renderModalAssignments() {
           <th>Nome</th>
           <th>Anotações</th>
           <th style="text-align:center;">Atribuído</th>
+          <th style="text-align:center;">Aberturas</th>
         </tr>
       </thead>
       <tbody>
         ${profiles.map((p) => {
           const checked = currentAssignments.includes(p.profile_id);
+          const openCount = p.open_count || 0;
+          const openBadge = openCount > 0
+            ? `<span class="open-count-badge" title="Última abertura: ${p.last_opened_at || '—'}">${openCount}x</span>`
+            : `<span class="dim-text">0</span>`;
           return `
           <tr class="${checked ? 'assign-row-active' : ''}">
             <td style="text-align:center;">
@@ -380,6 +391,7 @@ async function renderModalAssignments() {
                 ${checked ? '✔ Sim' : '— Não'}
               </span>
             </td>
+            <td style="text-align:center;">${openBadge}</td>
           </tr>`;
         }).join('')}
       </tbody>
