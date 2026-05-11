@@ -28,33 +28,62 @@ setInterval(updateClock, 1000);
 updateClock();
 
 // ── Navegação Lateral ────────────────────────────────────────────────────────
+
+const SECTION_TITLES = {
+  bots:       ['Bots Registrados', 'Controle múltiplos bots em tempo real'],
+  profiles:   ['Perfis do IxBrowser', 'Gerencie e atribua perfis aos seus bots'],
+  logs:       ['Terminal Global', 'Logs de todos os bots em tempo real'],
+  settings:   ['Configurações', 'Informações do sistema'],
+  botControl: ['Controle do Bot', 'Configurar, vincular perfis e enviar comandos'],
+};
+
+/**
+ * Navega para uma seção pelo nome, atualiza hash da URL e header.
+ * @param {string} section - ex: 'bots', 'profiles', 'logs', 'settings', 'botControl'
+ * @param {boolean} [updateHash=true] - se deve atualizar window.location.hash
+ */
+function navigateTo(section, updateHash = true) {
+  // Ativa nav item correspondente
+  document.querySelectorAll('.nav-item').forEach((n) => n.classList.remove('active'));
+  const navId = section === 'botControl' ? 'navBotControl' :
+                `nav${section.charAt(0).toUpperCase() + section.slice(1)}`;
+  document.getElementById(navId)?.classList.add('active');
+
+  // Ativa seção correta
+  document.querySelectorAll('.section-page').forEach((s) => s.classList.remove('active'));
+  const sectionKey = section.charAt(0).toUpperCase() + section.slice(1);
+  document.getElementById(`section${sectionKey}`)?.classList.add('active');
+
+  // Atualiza header
+  const titles = SECTION_TITLES[section];
+  if (titles) {
+    document.getElementById('headerTitle').textContent = titles[0];
+    document.getElementById('headerSubtitle').textContent = titles[1];
+  }
+
+  // Persiste no hash da URL (sem rolar a página)
+  if (updateHash) {
+    history.replaceState(null, '', `#${section}`);
+  }
+}
+
+// Cliques nos itens de menu
 document.querySelectorAll('.nav-item[data-section]').forEach((item) => {
   item.addEventListener('click', (e) => {
     e.preventDefault();
-    const section = item.dataset.section;
-
-    document.querySelectorAll('.nav-item').forEach((n) => n.classList.remove('active'));
-    item.classList.add('active');
-
-    document.querySelectorAll('.section-page').forEach((s) => s.classList.remove('active'));
-    const sectionKey = section.charAt(0).toUpperCase() + section.slice(1);
-    const target = document.getElementById(`section${sectionKey}`);
-    if (target) target.classList.add('active');
-
-    // Atualiza header
-    const titles = {
-      bots:       ['Bots Registrados', 'Controle múltiplos bots em tempo real'],
-      profiles:   ['Perfis do IxBrowser', 'Gerencie e atribua perfis aos seus bots'],
-      logs:       ['Terminal Global', 'Logs de todos os bots em tempo real'],
-      settings:   ['Configurações', 'Informações do sistema'],
-      botControl: ['Controle do Bot', 'Configurar, vincular perfis e enviar comandos'],
-    };
-    if (titles[section]) {
-      document.getElementById('headerTitle').textContent = titles[section][0];
-      document.getElementById('headerSubtitle').textContent = titles[section][1];
-    }
+    navigateTo(item.dataset.section);
   });
 });
+
+// Restaura seção ao carregar/recarregar (F5)
+(function restoreSection() {
+  const hash = window.location.hash.replace('#', '');
+  // botControl requer um bot ativo — ignora na restauração direta
+  const validSections = ['bots', 'profiles', 'logs', 'settings'];
+  const section = validSections.includes(hash) ? hash : 'bots';
+  navigateTo(section, false); // não reescreve hash, só ativa
+})();
+
 
 // ── Status do Socket ─────────────────────────────────────────────────────────
 document.addEventListener('socket:connected', (e) => {
@@ -468,13 +497,10 @@ function openBotModal(botId) {
   const logEl = document.getElementById('ctrlLogTerminal');
   if (logEl) logEl.innerHTML = '<div class="log-empty"><span>Aguardando ações...</span></div>';
 
-  // Navega para a seção
-  document.querySelectorAll('.nav-item').forEach((n) => n.classList.remove('active'));
-  document.getElementById('navBotControl')?.classList.add('active');
+  // Navega para a seção (atualiza hash para #botControl)
+  navigateTo('botControl');
 
-  document.querySelectorAll('.section-page').forEach((s) => s.classList.remove('active'));
-  document.getElementById('sectionBotControl')?.classList.add('active');
-
+  // Sobrescreve título com nome do bot
   document.getElementById('headerTitle').textContent    = `Controle: ${bot.name || 'Bot'}`;
   document.getElementById('headerSubtitle').textContent = `ID: ${botId}`;
 
@@ -490,15 +516,7 @@ function openBotModal(botId) {
 function closeBotControl() {
   state.activeBotModal = null;
   window._activeBotModal = null;
-
-  document.querySelectorAll('.nav-item').forEach((n) => n.classList.remove('active'));
-  document.getElementById('navBots')?.classList.add('active');
-
-  document.querySelectorAll('.section-page').forEach((s) => s.classList.remove('active'));
-  document.getElementById('sectionBots')?.classList.add('active');
-
-  document.getElementById('headerTitle').textContent    = 'Bots Registrados';
-  document.getElementById('headerSubtitle').textContent = 'Controle múltiplos bots em tempo real';
+  navigateTo('bots');
 }
 
 // Botão Voltar
