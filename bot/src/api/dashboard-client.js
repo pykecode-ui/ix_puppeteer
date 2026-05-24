@@ -171,6 +171,8 @@ async function notifyProfileOpen(profileId) {
 // HEARTBEAT
 // ══════════════════════════════════════════════════════════════════════════════
 
+const ixbrowser = require('./ixbrowser');
+
 /**
  * Inicia o heartbeat periódico ao dashboard.
  * @param {string} botId
@@ -180,7 +182,24 @@ function startHeartbeat(botId) {
 
   heartbeatTimer = setInterval(async () => {
     try {
-      await http.post(`/api/bots/${botId}/heartbeat`, { status: 'online' });
+      let openedProfiles = null;
+      try {
+        const rawOpened = await ixbrowser.listOpenedProfiles();
+        if (Array.isArray(rawOpened)) {
+          openedProfiles = rawOpened.map(p => typeof p === 'object' ? Number(p.profile_id || p.id) : Number(p));
+        } else if (rawOpened && typeof rawOpened === 'object') {
+          openedProfiles = Object.values(rawOpened).map(p => Number(p.profile_id || p.id || p));
+        }
+      } catch (err) {
+        // Ignorar se ixBrowser estiver offline no momento; null previne sobrescrever no DB
+      }
+
+      const payload = { status: 'online' };
+      if (openedProfiles !== null) {
+        payload.openedProfiles = openedProfiles;
+      }
+
+      await http.post(`/api/bots/${botId}/heartbeat`, payload);
     } catch (_) {
       // Silencia — o socket já sinaliza reconexão
     }

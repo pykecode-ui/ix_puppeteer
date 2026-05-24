@@ -78,10 +78,20 @@ document.querySelectorAll('.nav-item[data-section]').forEach((item) => {
 // Restaura seção ao carregar/recarregar (F5)
 (function restoreSection() {
   const hash = window.location.hash.replace('#', '');
-  // botControl requer um bot ativo — ignora na restauração direta
-  const validSections = ['bots', 'profiles', 'logs', 'settings'];
+  const validSections = ['bots', 'profiles', 'logs', 'settings', 'botControl'];
   const section = validSections.includes(hash) ? hash : 'bots';
-  navigateTo(section, false); // não reescreve hash, só ativa
+  
+  if (section === 'botControl') {
+    const savedBotId = sessionStorage.getItem('activeBotModal');
+    if (savedBotId) {
+       navigateTo('botControl', false);
+       window._pendingBotModal = savedBotId;
+    } else {
+       navigateTo('bots', false);
+    }
+  } else {
+    navigateTo(section, false); // não reescreve hash, só ativa
+  }
 })();
 
 
@@ -136,6 +146,15 @@ document.addEventListener('bots:list', (e) => {
   renderBotGrid();
   updateStats();
   updateLogFilter();
+
+  if (window._pendingBotModal) {
+    if (state.bots[window._pendingBotModal]) {
+      openBotModal(window._pendingBotModal);
+    } else {
+      closeBotControl();
+    }
+    window._pendingBotModal = null;
+  }
 });
 
 document.addEventListener('bots:updated', (e) => {
@@ -479,6 +498,7 @@ function openBotModal(botId) {
 
   state.activeBotModal = botId;
   window._activeBotModal = botId;
+  sessionStorage.setItem('activeBotModal', botId);
 
   // Atualiza breadcrumb
   const avatar = document.getElementById('botCtrlAvatar');
@@ -516,6 +536,7 @@ function openBotModal(botId) {
 function closeBotControl() {
   state.activeBotModal = null;
   window._activeBotModal = null;
+  sessionStorage.removeItem('activeBotModal');
   navigateTo('bots');
 }
 

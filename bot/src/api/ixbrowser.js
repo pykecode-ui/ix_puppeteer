@@ -15,21 +15,53 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+let isApiBusy = false;
+const apiQueue = [];
+
+function processQueue() {
+  if (isApiBusy || apiQueue.length === 0) return;
+  isApiBusy = true;
+  
+  const { endpoint, body, attempt, resolve, reject } = apiQueue.shift();
+  
+  _doCallAPI(endpoint, body, attempt)
+    .then(resolve)
+    .catch(reject)
+    .finally(() => {
+      isApiBusy = false;
+      processQueue();
+    });
+}
+
 /**
- * Faz uma chamada POST para a API do ixBrowser com retry automático.
- * @param {string} endpoint
- * @param {object} body
- * @param {number} attempt
+ * Enfileira a chamada da API para evitar requests simultâneos
+ * que causam ECONNRESET no ixBrowser local API.
  */
-async function callAPI(endpoint, body = {}, attempt = 1) {
+function callAPI(endpoint, body = {}, attempt = 1) {
+  return new Promise((resolve, reject) => {
+    apiQueue.push({ endpoint, body, attempt, resolve, reject });
+    processQueue();
+  });
+}
+
+/**
+ * Função interna que realmente faz o request
+ */
+async function _doCallAPI(endpoint, body, attempt) {
   try {
     const response = await axios.post(`${config.IX_API_BASE}${endpoint}`, body, {
       headers: HEADERS,
-      timeout: 10000,
+      timeout: 60000,
     });
     const { data } = response;
 
     if (data.error && data.error.code !== 0) {
+      // Se a API retornar um erro interno que parece erro de rede, podemos retentar
+      if (data.error.code === 'ECONNRESET' && attempt < RETRY_ATTEMPTS) {
+        console.warn(`[ixBrowser] Erro interno da API (ECONNRESET) — tentativa ${attempt}/${RETRY_ATTEMPTS}...`);
+        await sleep(RETRY_DELAY_MS);
+        return _doCallAPI(endpoint, body, attempt + 1);
+      }
       throw new Error(`ixBrowser API Error [${data.error.code}]: ${data.error.message}`);
     }
 
@@ -46,7 +78,7 @@ async function callAPI(endpoint, body = {}, attempt = 1) {
     if (isNetworkError && attempt < RETRY_ATTEMPTS) {
       console.warn(`[ixBrowser] Erro de rede (${err.code}) — tentativa ${attempt}/${RETRY_ATTEMPTS}...`);
       await sleep(RETRY_DELAY_MS);
-      return callAPI(endpoint, body, attempt + 1);
+      return _doCallAPI(endpoint, body, attempt + 1);
     }
 
     if (isNetworkError) {

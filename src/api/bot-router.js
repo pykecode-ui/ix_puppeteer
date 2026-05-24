@@ -47,7 +47,7 @@ function createBotRouter(io) {
   router.post('/bots/:botId/heartbeat', (req, res) => {
     try {
       const { botId } = req.params;
-      const { status = 'online' } = req.body;
+      const { status = 'online', openedProfiles } = req.body;
 
       const bot = models.getBotById(botId);
       if (!bot) {
@@ -56,8 +56,17 @@ function createBotRouter(io) {
 
       models.botHeartbeat(botId);
 
+      if (Array.isArray(openedProfiles)) {
+        models.syncBotProfiles(botId, openedProfiles);
+      }
+
       // Notifica painel silenciosamente (sem rebuild full da lista)
       io.emit('bot:heartbeat', { botId, status, timestamp: new Date().toISOString() });
+      
+      // Envia evento específico para o dashboard atualizar a tabela (se aberta)
+      if (Array.isArray(openedProfiles)) {
+        io.emit('bot:profiles_synced', { botId });
+      }
 
       return res.json({ ok: true });
     } catch (err) {

@@ -162,8 +162,13 @@ const COMMANDS = {
     log('info', `▶ Iniciando bot com ${profileIds.length} perfil(is): ${profileIds.join(', ')}`);
 
     const results = [];
-    for (const profileId of profileIds) {
+    for (let i = 0; i < profileIds.length; i++) {
+      const profileId = profileIds[i];
       try {
+        if (i > 0) {
+          log('info', `Aguardando 2 segundos antes de abrir o próximo perfil...`);
+          await new Promise(r => setTimeout(r, 2000));
+        }
         const r = await COMMANDS.open_profile({ profileId });
         results.push({ profileId, ok: true, ...r });
       } catch (err) {

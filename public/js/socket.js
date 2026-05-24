@@ -45,6 +45,7 @@ const SERVER_EVENTS = [
   'bot:detail',
   'profiles:updated',
   'bot:assignments_updated',
+  'bot:profiles_synced',
 ];
 
 SERVER_EVENTS.forEach((eventName) => {

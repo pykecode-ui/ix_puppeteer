@@ -35,6 +35,12 @@ document.addEventListener('profiles:updated', (e) => {
   renderModalAssignments(); // Atualiza lista no modal se aberto
 });
 
+document.addEventListener('bot:profiles_synced', (e) => {
+  if (window._activeBotModal && e.detail.botId === window._activeBotModal) {
+    renderModalAssignments();
+  }
+});
+
 // ── Carregar perfis da API ────────────────────────────────────────────────────
 async function loadProfiles() {
   try {
@@ -48,6 +54,7 @@ async function loadProfiles() {
     profilesState.allAssignments = assignData.ok ? (assignData.assignments || {}) : {};
     renderProfilesTable();
     updateProfileStats();
+    renderModalAssignments();
   } catch (err) {
     console.error('[Perfis] Erro ao carregar:', err.message);
   }
@@ -339,14 +346,26 @@ async function renderModalAssignments() {
     return;
   }
 
-  // Carrega atribuições atuais do bot
+  // Carrega atribuições atuais do bot e o estado de execução dos perfis
   let currentAssignments = profilesState.assignments[botId] || [];
+  let botProfilesInfo = {};
+
   try {
-    const res = await fetch(`/api/bots/${botId}/assignments`);
-    const data = await res.json();
-    if (data.ok) {
-      currentAssignments = data.assignments.map((a) => a.profile_id);
+    const [resAssign, resBot] = await Promise.all([
+      fetch(`/api/bots/${botId}/assignments`),
+      fetch(`/api/bots/${botId}`)
+    ]);
+    const dataAssign = await resAssign.json();
+    const dataBot = await resBot.json();
+
+    if (dataAssign.ok) {
+      currentAssignments = dataAssign.assignments.map((a) => a.profile_id);
       profilesState.assignments[botId] = currentAssignments;
+    }
+    if (dataBot.ok && dataBot.profiles) {
+      dataBot.profiles.forEach(bp => {
+        botProfilesInfo[bp.profile_id] = bp;
+      });
     }
   } catch (_) {}
 
@@ -358,6 +377,7 @@ async function renderModalAssignments() {
             <input type="checkbox" id="assignCheckAll" title="Selecionar todos" style="accent-color:var(--accent); cursor:pointer;" />
           </th>
           <th>ID</th>
+          <th style="text-align:center;">Status</th>
           <th>Nome</th>
           <th>Anotações</th>
           <th style="text-align:center;">Atribuído</th>
@@ -367,6 +387,12 @@ async function renderModalAssignments() {
       <tbody>
         ${profiles.map((p) => {
           const checked = currentAssignments.includes(p.profile_id);
+          const bpInfo = botProfilesInfo[p.profile_id] || { status: 'closed', open_count: 0 };
+          
+          const statusBadge = bpInfo.status === 'open' 
+            ? `<span style="color:var(--green);font-weight:600;font-size:12px;" title="Aberto em: ${bpInfo.last_opened_at || '—'}">🟢 Aberto</span>`
+            : `<span style="color:var(--red);font-weight:600;font-size:12px;" title="Fechado em: ${bpInfo.last_closed_at || '—'}">🔴 Fechado</span>`;
+
           const openCount = p.open_count || 0;
           const openBadge = openCount > 0
             ? `<span class="open-count-badge" title="Última abertura: ${p.last_opened_at || '—'}">${openCount}x</span>`
@@ -384,6 +410,7 @@ async function renderModalAssignments() {
               />
             </td>
             <td><span class="profile-id-badge">#${p.profile_id}</span></td>
+            <td style="text-align:center;">${statusBadge}</td>
             <td>${escapeHtml(p.name) || '<span class="dim-text">—</span>'}</td>
             <td>${escapeHtml(p.notes) || '<span class="dim-text">—</span>'}</td>
             <td style="text-align:center;">

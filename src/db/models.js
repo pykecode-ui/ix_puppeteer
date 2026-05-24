@@ -306,6 +306,46 @@ function getBotProfiles(botId) {
     .all(botId);
 }
 
+/**
+ * Sincroniza o status real dos perfis abertos no ixBrowser com o banco de dados.
+ * @param {string} botId
+ * @param {number[]} openedProfileIds - Array com os IDs dos perfis que estão de fato abertos.
+ */
+function syncBotProfiles(botId, openedProfileIds) {
+  const now = nowBrasilia();
+  const db = getDB();
+  
+  // Transação para evitar concorrência e garantir atomicidade
+  const tx = db.transaction(() => {
+    // 1. Pega todos os perfis do bot para verificar status
+    const allProfiles = getBotProfiles(botId);
+    
+    const updateOpen = db.prepare(`
+      UPDATE bot_profiles 
+      SET status = 'open', updated_at = ? 
+      WHERE bot_id = ? AND profile_id = ? AND status != 'open'
+    `);
+    
+    const updateClosed = db.prepare(`
+      UPDATE bot_profiles 
+      SET status = 'closed', last_closed_at = ?, updated_at = ? 
+      WHERE bot_id = ? AND profile_id = ? AND status != 'closed'
+    `);
+
+    for (const bp of allProfiles) {
+      const isActuallyOpen = openedProfileIds.includes(bp.profile_id);
+      
+      if (isActuallyOpen && bp.status !== 'open') {
+        updateOpen.run(now, botId, bp.profile_id);
+      } else if (!isActuallyOpen && bp.status === 'open') {
+        updateClosed.run(now, now, botId, bp.profile_id);
+      }
+    }
+  });
+  
+  tx();
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // IX PROFILES (perfis globais do IxBrowser cadastrados no dashboard)
 // ══════════════════════════════════════════════════════════════════════════════
@@ -465,6 +505,7 @@ module.exports = {
   recordBotProfileOpen,
   recordBotProfileClose,
   getBotProfiles,
+  syncBotProfiles,
   // IxBrowser profiles (cadastro global)
   getAllIxProfiles,
   getIxProfile,

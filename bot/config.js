@@ -26,7 +26,7 @@ module.exports = {
 
   // ── Comportamento do Bot ───────────────────────────────────────
   // Intervalo em ms para enviar heartbeat ao dashboard
-  HEARTBEAT_INTERVAL_MS: 8000,
+  HEARTBEAT_INTERVAL_MS: 3000,
 
   // Timeout em ms para chamadas HTTP ao dashboard
   API_TIMEOUT_MS: 10000,
