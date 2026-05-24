@@ -22,9 +22,9 @@ function processQueue() {
   if (isApiBusy || apiQueue.length === 0) return;
   isApiBusy = true;
   
-  const { endpoint, body, attempt, resolve, reject } = apiQueue.shift();
+  const { endpoint, body, attempt, options, resolve, reject } = apiQueue.shift();
   
-  _doCallAPI(endpoint, body, attempt)
+  _doCallAPI(endpoint, body, attempt, options)
     .then(resolve)
     .catch(reject)
     .finally(() => {
@@ -37,9 +37,9 @@ function processQueue() {
  * Enfileira a chamada da API para evitar requests simultâneos
  * que causam ECONNRESET no ixBrowser local API.
  */
-function callAPI(endpoint, body = {}, attempt = 1) {
+function callAPI(endpoint, body = {}, options = {}) {
   return new Promise((resolve, reject) => {
-    apiQueue.push({ endpoint, body, attempt, resolve, reject });
+    apiQueue.push({ endpoint, body, attempt: 1, options, resolve, reject });
     processQueue();
   });
 }
@@ -47,7 +47,7 @@ function callAPI(endpoint, body = {}, attempt = 1) {
 /**
  * Função interna que realmente faz o request
  */
-async function _doCallAPI(endpoint, body, attempt) {
+async function _doCallAPI(endpoint, body, attempt, options) {
   try {
     const response = await axios.post(`${config.IX_API_BASE}${endpoint}`, body, {
       headers: HEADERS,
@@ -58,9 +58,9 @@ async function _doCallAPI(endpoint, body, attempt) {
     if (data.error && data.error.code !== 0) {
       // Se a API retornar um erro interno que parece erro de rede, podemos retentar
       if (data.error.code === 'ECONNRESET' && attempt < RETRY_ATTEMPTS) {
-        console.warn(`[ixBrowser] Erro interno da API (ECONNRESET) — tentativa ${attempt}/${RETRY_ATTEMPTS}...`);
+        if (!options.silent) console.warn(`[ixBrowser] Erro interno da API (ECONNRESET) — tentativa ${attempt}/${RETRY_ATTEMPTS}...`);
         await sleep(RETRY_DELAY_MS);
-        return _doCallAPI(endpoint, body, attempt + 1);
+        return _doCallAPI(endpoint, body, attempt + 1, options);
       }
       throw new Error(`ixBrowser API Error [${data.error.code}]: ${data.error.message}`);
     }
@@ -76,9 +76,9 @@ async function _doCallAPI(endpoint, body, attempt) {
 
     const isNetworkError = ['ENOTFOUND', 'ETIMEDOUT', 'ECONNRESET', 'EAI_AGAIN'].includes(err.code);
     if (isNetworkError && attempt < RETRY_ATTEMPTS) {
-      console.warn(`[ixBrowser] Erro de rede (${err.code}) — tentativa ${attempt}/${RETRY_ATTEMPTS}...`);
+      if (!options.silent) console.warn(`[ixBrowser] Erro de rede (${err.code}) — tentativa ${attempt}/${RETRY_ATTEMPTS}...`);
       await sleep(RETRY_DELAY_MS);
-      return _doCallAPI(endpoint, body, attempt + 1);
+      return _doCallAPI(endpoint, body, attempt + 1, options);
     }
 
     if (isNetworkError) {
@@ -99,6 +99,8 @@ async function _doCallAPI(endpoint, body, attempt) {
 async function openProfile(profileId) {
   const result = await callAPI('/api/v2/profile-open', {
     profile_id: Number(profileId),
+    load_profile_info_page: true,
+    load_extensions: true
   });
 
   if (!result.ws) {
@@ -125,7 +127,7 @@ async function closeProfile(profileId) {
  * @returns {Promise<Array>}
  */
 async function listOpenedProfiles() {
-  return await callAPI('/api/v2/profile-opened-list', {});
+  return await callAPI('/api/v2/profile-opened-list', {}, { silent: true });
 }
 
 module.exports = { openProfile, closeProfile, listOpenedProfiles };

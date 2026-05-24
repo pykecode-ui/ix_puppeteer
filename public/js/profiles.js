@@ -369,12 +369,26 @@ async function renderModalAssignments() {
     }
   } catch (_) {}
 
+  // Oculta perfis não vinculados conforme pedido do usuário
+  const assignedProfiles = profiles.filter(p => currentAssignments.includes(p.profile_id));
+
+  if (assignedProfiles.length === 0) {
+    container.innerHTML = `
+      <div class="profile-empty-state">
+        <div class="empty-icon">🔗</div>
+        <div class="empty-title">Nenhum perfil vinculado</div>
+        <div class="empty-desc">Vá até a aba <strong>Perfis</strong> e clique em <strong>Vincular a Bot</strong>.</div>
+      </div>`;
+    updateAssignmentsCount();
+    return;
+  }
+
   container.innerHTML = `
     <table class="profiles-table assign-table">
       <thead>
         <tr>
           <th style="width:40px; text-align:center;">
-            <input type="checkbox" id="assignCheckAll" title="Selecionar todos" style="accent-color:var(--accent); cursor:pointer;" />
+            <input type="checkbox" id="assignCheckAll" title="Selecionar todos" checked style="accent-color:var(--accent); cursor:pointer;" />
           </th>
           <th>ID</th>
           <th style="text-align:center;">Status</th>
@@ -385,7 +399,7 @@ async function renderModalAssignments() {
         </tr>
       </thead>
       <tbody>
-        ${profiles.map((p) => {
+        ${assignedProfiles.map((p) => {
           const checked = currentAssignments.includes(p.profile_id);
           const bpInfo = botProfilesInfo[p.profile_id] || { status: 'closed', open_count: 0 };
           
@@ -527,6 +541,8 @@ async function openAssignBotModal(profileId) {
   label.textContent = `#${profileId}`;
   list.innerHTML = '<div class="log-empty"><span>Carregando bots...</span></div>';
   overlay.style.display = 'flex';
+  // Pequeno timeout para garantir a transição CSS
+  setTimeout(() => overlay.classList.add('visible'), 10);
 
   try {
     // Carrega todos os bots
@@ -575,7 +591,13 @@ async function openAssignBotModal(profileId) {
 
 function closeAssignBotModal() {
   _assignBotTargetProfileId = null;
-  document.getElementById('assignBotOverlay').style.display = 'none';
+  const overlay = document.getElementById('assignBotOverlay');
+  if (overlay) {
+    overlay.classList.remove('visible');
+    setTimeout(() => {
+      overlay.style.display = 'none';
+    }, 300); // Tempo da transição CSS
+  }
 }
 
 // Listeners do modal de vínculo
