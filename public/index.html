@@ -37,6 +37,12 @@
         <span class="nav-badge" id="navProfileCount">0</span>
       </a>
 
+      <a class="nav-item" id="navPalavras" href="#" role="menuitem" data-section="palavras">
+        <span class="nav-icon" aria-hidden="true">🔍</span>
+        <span>Palavras</span>
+        <span class="nav-badge" id="navModuleCount">0</span>
+      </a>
+
       <a class="nav-item" id="navLogs" href="#" role="menuitem" data-section="logs">
         <span class="nav-icon" aria-hidden="true">📋</span>
         <span>Logs</span>
@@ -256,6 +262,123 @@
                 </thead>
                 <tbody id="profilesTableBody"></tbody>
               </table>
+            </div>
+          </div>
+        </article>
+
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════════ -->
+      <!-- SEÇÃO: PALAVRAS (Módulos de Pesquisa)                              -->
+      <!-- ══════════════════════════════════════════════════════════════════ -->
+      <section id="sectionPalavras" class="section-page">
+
+        <!-- Stats Row -->
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-icon purple" aria-hidden="true">📦</div>
+            <div class="stat-info">
+              <div class="stat-value" id="statTotalModules">0</div>
+              <div class="stat-label">Módulos</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green" aria-hidden="true">🔤</div>
+            <div class="stat-info">
+              <div class="stat-value" id="statTotalWords">0</div>
+              <div class="stat-label">Palavras</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon yellow" aria-hidden="true">✅</div>
+            <div class="stat-info">
+              <div class="stat-value" id="statActiveModules">0</div>
+              <div class="stat-label">Ativos</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Criar Novo Módulo -->
+        <article class="card" aria-label="Criar módulo de pesquisa">
+          <div class="card-header">
+            <div class="card-title-group">
+              <div class="card-icon" style="background: var(--purple-soft);" aria-hidden="true">➕</div>
+              <div>
+                <div class="card-title">Criar Módulo de Pesquisa</div>
+                <div class="card-subtitle">Crie um bloco de palavras-chave para seus bots</div>
+              </div>
+            </div>
+          </div>
+          <div class="card-body" style="padding: 16px 22px;">
+            <div class="profile-form-row">
+              <div class="profile-form-group" style="flex:1">
+                <label class="form-label" for="smLabel">Label do Módulo *</label>
+                <input type="text" class="modal-input" id="smLabel" placeholder="Ex: Carros, Tecnologia, Marketing..." />
+              </div>
+              <div class="profile-form-group" style="flex:2">
+                <label class="form-label" for="smDescription">Descrição (opcional)</label>
+                <input type="text" class="modal-input" id="smDescription" placeholder="Breve descrição do módulo" />
+              </div>
+            </div>
+            <button class="btn btn-primary" id="btnCreateModule" style="margin-top:12px;">➕ Criar Módulo</button>
+          </div>
+        </article>
+
+        <!-- Grid de Módulos -->
+        <article class="card" style="margin-top:16px;" aria-label="Lista de módulos">
+          <div class="card-header">
+            <div class="card-title-group">
+              <div class="card-icon" style="background: var(--blue-soft, #1e3a5f);" aria-hidden="true">📦</div>
+              <div>
+                <div class="card-title">Módulos de Pesquisa</div>
+                <div class="card-subtitle">Seus blocos de palavras-chave configurados</div>
+              </div>
+            </div>
+            <button class="toolbar-btn" id="btnRefreshModules" aria-label="Atualizar módulos">🔄 Atualizar</button>
+          </div>
+          <div class="card-body" style="padding:16px 22px;">
+            <div id="modulesGrid" class="modules-grid">
+              <div class="profile-empty-state" id="modulesEmptyState">
+                <div class="empty-icon">📦</div>
+                <div class="empty-title">Nenhum módulo criado</div>
+                <div class="empty-desc">Use o formulário acima para criar seu primeiro módulo de pesquisa.</div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- Detalhe do Módulo (palavras) — oculto por padrão -->
+        <article class="card" style="margin-top:16px; display:none;" id="moduleDetailCard" aria-label="Palavras do módulo">
+          <div class="card-header">
+            <div class="card-title-group">
+              <div class="card-icon" style="background: var(--green-soft);" aria-hidden="true">🔤</div>
+              <div>
+                <div class="card-title" id="moduleDetailTitle">Palavras do Módulo</div>
+                <div class="card-subtitle" id="moduleDetailSubtitle">—</div>
+              </div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <span class="assignments-count" id="moduleWordCount" style="font-size:12px;">0 palavra(s)</span>
+              <button class="toolbar-btn" id="btnClearWords" title="Limpar todas as palavras">🗑 Limpar Tudo</button>
+              <button class="toolbar-btn" id="btnCloseModuleDetail" title="Fechar detalhe">✕ Fechar</button>
+            </div>
+          </div>
+          <div class="card-body" style="padding:16px 22px;">
+            <!-- Adicionar palavras -->
+            <div class="profile-form-group" style="margin-bottom:16px;">
+              <label class="form-label" for="smNewWords">Adicionar Palavras</label>
+              <textarea
+                class="modal-input"
+                id="smNewWords"
+                placeholder="Cole palavras separadas por vírgula, espaço ou quebra de linha.&#10;Exemplo: sedan, SUV, hatch, elétrico"
+                rows="3"
+                style="resize:vertical; font-family: var(--font-mono); font-size:13px;"
+              ></textarea>
+              <button class="btn btn-primary" id="btnAddWords" style="margin-top:8px;">⚡ Adicionar Palavras</button>
+            </div>
+            <!-- Lista de palavras -->
+            <div id="moduleWordsList" class="word-chips-container">
+              <div class="log-empty"><span>Nenhuma palavra adicionada.</span></div>
             </div>
           </div>
         </article>
@@ -512,7 +635,8 @@
   <script src="/js/dashboard.js"></script>
   <!-- Gerenciamento de perfis -->
   <script src="/js/profiles.js"></script>
-
+  <!-- Módulos de pesquisa (palavras-chave) -->
+  <script src="/js/palavras.js"></script>
 </body>
 </html>
 

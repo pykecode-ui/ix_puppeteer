@@ -159,6 +159,43 @@ function initDatabase() {
     )
   `);
 
+  // ─── Tabelas: Módulos de Pesquisa (Palavras-chave) ─────────────────────────
+
+  // Tabela: módulos/blocos de pesquisa (cada bloco tem um label)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS search_modules (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      label       TEXT    NOT NULL,
+      description TEXT,
+      is_active   INTEGER NOT NULL DEFAULT 1,
+      created_at  TEXT    NOT NULL,
+      updated_at  TEXT    NOT NULL
+    )
+  `);
+
+  // Tabela: palavras-chave de cada módulo
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS search_words (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      module_id   INTEGER NOT NULL,
+      word        TEXT    NOT NULL,
+      created_at  TEXT    NOT NULL,
+      FOREIGN KEY (module_id) REFERENCES search_modules(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Tabela: vínculo perfil ↔ módulo de pesquisa (1 perfil → 1 módulo)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS profile_module_links (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      profile_id  INTEGER NOT NULL UNIQUE,
+      module_id   INTEGER NOT NULL,
+      created_at  TEXT    NOT NULL,
+      FOREIGN KEY (profile_id) REFERENCES ix_profiles(profile_id) ON DELETE CASCADE,
+      FOREIGN KEY (module_id) REFERENCES search_modules(id) ON DELETE CASCADE
+    )
+  `);
+
   // ─── Seed: garante que a linha do bot_state existe ─────────────────────────
   const existingState = db.prepare('SELECT id FROM bot_state WHERE id = 1').get();
   if (!existingState) {

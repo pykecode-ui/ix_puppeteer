@@ -205,6 +205,48 @@ function createProfilesRouter(io) {
     }
   });
 
+  // ─── GET /api/profile-module-links ─────────────────────────────────────────
+  // Retorna todos os vínculos perfil→módulo
+  router.get('/profile-module-links', (req, res) => {
+    try {
+      const links = models.getAllProfileModuleLinks();
+      res.json({ ok: true, links });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
+  // ─── PUT /api/profiles/:profileId/module ───────────────────────────────────
+  // Define ou altera o módulo vinculado a um perfil
+  router.put('/profiles/:profileId/module', (req, res) => {
+    try {
+      const profileId = Number(req.params.profileId);
+      const { module_id } = req.body;
+
+      if (!module_id) {
+        // Remove o vínculo
+        models.removeProfileModuleLink(profileId);
+        return res.json({ ok: true, message: 'Vínculo de módulo removido.' });
+      }
+
+      models.setProfileModuleLink(profileId, Number(module_id));
+      res.json({ ok: true, message: 'Módulo vinculado ao perfil.' });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
+  // ─── DELETE /api/profiles/:profileId/module ────────────────────────────────
+  // Remove o módulo vinculado a um perfil
+  router.delete('/profiles/:profileId/module', (req, res) => {
+    try {
+      models.removeProfileModuleLink(Number(req.params.profileId));
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
   return router;
 }
 

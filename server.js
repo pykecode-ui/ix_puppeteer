@@ -26,6 +26,7 @@ console.log('[DB] ♻️  Status de todos os bots resetado para offline.');
 const { registerHandlers } = require('./src/socket/handlers');
 const { createBotRouter } = require('./src/api/bot-router');
 const { createProfilesRouter } = require('./src/api/profiles-router');
+const { createPalavrasRouter } = require('./src/api/palavras-router');
 
 
 const app = express();
@@ -49,6 +50,9 @@ app.use('/api', createBotRouter(io));
 
 // ─── API REST para perfis globais ────────────────────────────────────────────
 app.use('/api', createProfilesRouter(io));
+
+// ─── API REST para módulos de pesquisa (palavras-chave) ──────────────────────
+app.use('/api', createPalavrasRouter(io));
 
 
 // Rota principal — retorna o dashboard

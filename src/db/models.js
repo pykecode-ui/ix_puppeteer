@@ -476,6 +476,182 @@ function setBotProfileAssignments(botId, profileIds) {
   tx();
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// SEARCH MODULES (Módulos de Pesquisa — Palavras-chave)
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Cria um novo módulo de pesquisa.
+ * @param {string} label
+ * @param {string|null} description
+ * @returns {object} O módulo criado
+ */
+function createSearchModule(label, description = null) {
+  const now = nowBrasilia();
+  const result = getDB().prepare(`
+    INSERT INTO search_modules (label, description, is_active, created_at, updated_at)
+    VALUES (?, ?, 1, ?, ?)
+  `).run(label, description, now, now);
+  return getDB().prepare('SELECT * FROM search_modules WHERE id = ?').get(result.lastInsertRowid);
+}
+
+/**
+ * Atualiza um módulo de pesquisa.
+ * @param {number} id
+ * @param {string} label
+ * @param {string|null} description
+ * @param {number} isActive - 1 ou 0
+ */
+function updateSearchModule(id, label, description, isActive) {
+  const now = nowBrasilia();
+  getDB().prepare(`
+    UPDATE search_modules
+    SET label = ?, description = ?, is_active = ?, updated_at = ?
+    WHERE id = ?
+  `).run(label, description, isActive ? 1 : 0, now, id);
+}
+
+/**
+ * Remove um módulo de pesquisa e suas palavras (ON DELETE CASCADE).
+ * @param {number} id
+ */
+function deleteSearchModule(id) {
+  getDB().prepare('DELETE FROM search_modules WHERE id = ?').run(id);
+}
+
+/**
+ * Retorna todos os módulos com contagem de palavras.
+ * @returns {Array}
+ */
+function getAllSearchModules() {
+  return getDB().prepare(`
+    SELECT sm.*,
+           (SELECT COUNT(*) FROM search_words sw WHERE sw.module_id = sm.id) AS word_count
+    FROM search_modules sm
+    ORDER BY sm.created_at DESC
+  `).all();
+}
+
+/**
+ * Retorna um módulo pelo ID, junto com todas as suas palavras.
+ * @param {number} id
+ * @returns {object|undefined}
+ */
+function getSearchModuleById(id) {
+  const mod = getDB().prepare('SELECT * FROM search_modules WHERE id = ?').get(id);
+  if (!mod) return undefined;
+  mod.words = getDB().prepare(
+    'SELECT * FROM search_words WHERE module_id = ? ORDER BY id ASC'
+  ).all(id);
+  return mod;
+}
+
+/**
+ * Adiciona palavras em massa a um módulo.
+ * @param {number} moduleId
+ * @param {string[]} words
+ * @returns {number} Quantidade adicionada
+ */
+function addWordsToModule(moduleId, words) {
+  const now = nowBrasilia();
+  const stmt = getDB().prepare(`
+    INSERT INTO search_words (module_id, word, created_at) VALUES (?, ?, ?)
+  `);
+  let count = 0;
+  const tx = getDB().transaction(() => {
+    for (const w of words) {
+      const trimmed = w.trim();
+      if (trimmed.length > 0) {
+        stmt.run(moduleId, trimmed, now);
+        count++;
+      }
+    }
+    // Atualiza updated_at do módulo
+    getDB().prepare('UPDATE search_modules SET updated_at = ? WHERE id = ?').run(now, moduleId);
+  });
+  tx();
+  return count;
+}
+
+/**
+ * Atualiza o texto de uma palavra.
+ * @param {number} wordId
+ * @param {string} newWord
+ */
+function updateWord(wordId, newWord) {
+  getDB().prepare('UPDATE search_words SET word = ? WHERE id = ?').run(newWord.trim(), wordId);
+}
+
+/**
+ * Remove uma palavra pelo ID.
+ * @param {number} wordId
+ */
+function deleteWord(wordId) {
+  getDB().prepare('DELETE FROM search_words WHERE id = ?').run(wordId);
+}
+
+/**
+ * Remove todas as palavras de um módulo.
+ * @param {number} moduleId
+ */
+function deleteAllWordsFromModule(moduleId) {
+  const now = nowBrasilia();
+  getDB().prepare('DELETE FROM search_words WHERE module_id = ?').run(moduleId);
+  getDB().prepare('UPDATE search_modules SET updated_at = ? WHERE id = ?').run(now, moduleId);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PROFILE ↔ MODULE LINKS (vínculo perfil → módulo de pesquisa)
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Retorna o módulo vinculado a um perfil.
+ * @param {number} profileId
+ * @returns {object|undefined} { profile_id, module_id, label, ... }
+ */
+function getProfileModuleLink(profileId) {
+  return getDB().prepare(`
+    SELECT pml.profile_id, pml.module_id, sm.label, sm.description, sm.is_active
+    FROM profile_module_links pml
+    JOIN search_modules sm ON sm.id = pml.module_id
+    WHERE pml.profile_id = ?
+  `).get(profileId);
+}
+
+/**
+ * Retorna todos os vínculos perfil→módulo de uma vez.
+ * @returns {Array}
+ */
+function getAllProfileModuleLinks() {
+  return getDB().prepare(`
+    SELECT pml.profile_id, pml.module_id, sm.label
+    FROM profile_module_links pml
+    JOIN search_modules sm ON sm.id = pml.module_id
+  `).all();
+}
+
+/**
+ * Define o módulo vinculado a um perfil (UPSERT).
+ * @param {number} profileId
+ * @param {number} moduleId
+ */
+function setProfileModuleLink(profileId, moduleId) {
+  const now = nowBrasilia();
+  getDB().prepare(`
+    INSERT INTO profile_module_links (profile_id, module_id, created_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(profile_id) DO UPDATE SET module_id = ?, created_at = ?
+  `).run(profileId, moduleId, now, moduleId, now);
+}
+
+/**
+ * Remove o vínculo de módulo de um perfil.
+ * @param {number} profileId
+ */
+function removeProfileModuleLink(profileId) {
+  getDB().prepare('DELETE FROM profile_module_links WHERE profile_id = ?').run(profileId);
+}
+
 module.exports = {
   // Bot state (legado)
   getBotState,
@@ -516,5 +692,19 @@ module.exports = {
   // Bot profile assignments
   getBotProfileAssignments,
   setBotProfileAssignments,
+  // Search modules (Módulos de Pesquisa)
+  createSearchModule,
+  updateSearchModule,
+  deleteSearchModule,
+  getAllSearchModules,
+  getSearchModuleById,
+  addWordsToModule,
+  updateWord,
+  deleteWord,
+  deleteAllWordsFromModule,
+  // Profile ↔ Module links
+  getProfileModuleLink,
+  getAllProfileModuleLinks,
+  setProfileModuleLink,
+  removeProfileModuleLink,
 };
-

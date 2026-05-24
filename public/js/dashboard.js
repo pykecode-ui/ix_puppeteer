@@ -32,6 +32,7 @@ updateClock();
 const SECTION_TITLES = {
   bots:       ['Bots Registrados', 'Controle múltiplos bots em tempo real'],
   profiles:   ['Perfis do IxBrowser', 'Gerencie e atribua perfis aos seus bots'],
+  palavras:   ['Módulos de Pesquisa', 'Gerencie blocos de palavras-chave para seus bots'],
   logs:       ['Terminal Global', 'Logs de todos os bots em tempo real'],
   settings:   ['Configurações', 'Informações do sistema'],
   botControl: ['Controle do Bot', 'Configurar, vincular perfis e enviar comandos'],
@@ -78,7 +79,7 @@ document.querySelectorAll('.nav-item[data-section]').forEach((item) => {
 // Restaura seção ao carregar/recarregar (F5)
 (function restoreSection() {
   const hash = window.location.hash.replace('#', '');
-  const validSections = ['bots', 'profiles', 'logs', 'settings', 'botControl'];
+  const validSections = ['bots', 'profiles', 'palavras', 'logs', 'settings', 'botControl'];
   const section = validSections.includes(hash) ? hash : 'bots';
   
   if (section === 'botControl') {

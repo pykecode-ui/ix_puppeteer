@@ -383,6 +383,24 @@ async function renderModalAssignments() {
     return;
   }
 
+  // Carrega os vínculos perfil→módulo e a lista de módulos disponíveis
+  let moduleLinksMap = {};
+  let availableModules = [];
+  try {
+    const [resLinks, resMods] = await Promise.all([
+      fetch('/api/profile-module-links'),
+      fetch('/api/search-modules')
+    ]);
+    const dataLinks = await resLinks.json();
+    const dataMods = await resMods.json();
+    if (dataLinks.ok) {
+      dataLinks.links.forEach(l => { moduleLinksMap[l.profile_id] = l; });
+    }
+    if (dataMods.ok) {
+      availableModules = dataMods.modules || [];
+    }
+  } catch (_) {}
+
   container.innerHTML = `
     <table class="profiles-table assign-table">
       <thead>
@@ -393,6 +411,7 @@ async function renderModalAssignments() {
           <th>ID</th>
           <th style="text-align:center;">Status</th>
           <th>Nome</th>
+          <th style="text-align:center;">Módulo</th>
           <th>Anotações</th>
           <th style="text-align:center;">Atribuído</th>
           <th style="text-align:center;">Aberturas</th>
@@ -411,6 +430,12 @@ async function renderModalAssignments() {
           const openBadge = openCount > 0
             ? `<span class="open-count-badge" title="Última abertura: ${p.last_opened_at || '—'}">${openCount}x</span>`
             : `<span class="dim-text">0</span>`;
+
+          const linkedModule = moduleLinksMap[p.profile_id];
+          const moduleBadge = linkedModule
+            ? `<span class="module-link-badge linked" title="Módulo: ${escapeHtml(linkedModule.label)}">${escapeHtml(linkedModule.label)}</span>`
+            : `<span class="module-link-badge unlinked">—</span>`;
+
           return `
           <tr class="${checked ? 'assign-row-active' : ''}">
             <td style="text-align:center;">
@@ -426,6 +451,12 @@ async function renderModalAssignments() {
             <td><span class="profile-id-badge">#${p.profile_id}</span></td>
             <td style="text-align:center;">${statusBadge}</td>
             <td>${escapeHtml(p.name) || '<span class="dim-text">—</span>'}</td>
+            <td style="text-align:center;">
+              <div class="module-link-cell">
+                ${moduleBadge}
+                <button class="module-link-btn" onclick="openModuleSelector(${p.profile_id})" title="Vincular módulo">📦</button>
+              </div>
+            </td>
             <td>${escapeHtml(p.notes) || '<span class="dim-text">—</span>'}</td>
             <td style="text-align:center;">
               <span class="assign-status-badge ${checked ? 'assigned' : 'unassigned'}">
@@ -437,6 +468,10 @@ async function renderModalAssignments() {
         }).join('')}
       </tbody>
     </table>`;
+
+  // Guarda módulos disponíveis no estado para o seletor
+  window._availableModules = availableModules;
+  window._moduleLinksMap = moduleLinksMap;
 
   // Checkbox "marcar todos" no cabeçalho
   const checkAll = document.getElementById('assignCheckAll');
@@ -658,7 +693,116 @@ window.profiles_onModalOpen = function (botId) {
   renderModalAssignments();
 };
 
+// ── Modal Seletor de Módulo para Perfil ──────────────────────────────────────
+
+/**
+ * Abre um popup flutuante ao lado do botão clicado para escolher um módulo.
+ * @param {number} profileId
+ */
+function openModuleSelector(profileId) {
+  // Remove popup existente se houver
+  document.getElementById('moduleSelectorPopup')?.remove();
+
+  const modules = window._availableModules || [];
+  const currentLink = (window._moduleLinksMap || {})[profileId];
+
+  const popup = document.createElement('div');
+  popup.id = 'moduleSelectorPopup';
+  popup.className = 'module-selector-popup';
+  popup.innerHTML = `
+    <div class="module-selector-header">
+      <span>📦 Módulo para #${profileId}</span>
+      <button class="module-selector-close" onclick="closeModuleSelector()">✕</button>
+    </div>
+    <div class="module-selector-list">
+      ${currentLink ? `
+        <div class="module-selector-item active" onclick="unlinkModule(${profileId})">
+          <span>❌</span>
+          <span>Remover vínculo</span>
+        </div>
+      ` : ''}
+      ${modules.length === 0
+        ? '<div class="module-selector-empty">Nenhum módulo criado.<br>Vá até <strong>Palavras</strong> para criar.</div>'
+        : modules.map(m => {
+            const isSelected = currentLink && currentLink.module_id === m.id;
+            const activeLabel = m.is_active ? '' : ' <span style="color:var(--red);font-size:10px;">(inativo)</span>';
+            return `
+              <div class="module-selector-item ${isSelected ? 'selected' : ''}" onclick="selectModuleForProfile(${profileId}, ${m.id})">
+                <span>${isSelected ? '✅' : '📦'}</span>
+                <span>${escapeHtml(m.label)}${activeLabel}</span>
+                <span class="module-selector-count">${m.word_count || 0} palavras</span>
+              </div>`;
+          }).join('')
+      }
+    </div>
+  `;
+
+  document.body.appendChild(popup);
+
+  // Posiciona perto do centro da tela
+  requestAnimationFrame(() => {
+    popup.classList.add('visible');
+  });
+
+  // Fecha ao clicar fora
+  setTimeout(() => {
+    document.addEventListener('click', _closeSelectorOnOutsideClick);
+  }, 50);
+}
+
+function _closeSelectorOnOutsideClick(e) {
+  const popup = document.getElementById('moduleSelectorPopup');
+  if (popup && !popup.contains(e.target) && !e.target.classList.contains('module-link-btn')) {
+    closeModuleSelector();
+  }
+}
+
+function closeModuleSelector() {
+  const popup = document.getElementById('moduleSelectorPopup');
+  if (popup) {
+    popup.classList.remove('visible');
+    setTimeout(() => popup.remove(), 200);
+  }
+  document.removeEventListener('click', _closeSelectorOnOutsideClick);
+}
+
+async function selectModuleForProfile(profileId, moduleId) {
+  try {
+    const res = await fetch(`/api/profiles/${profileId}/module`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ module_id: moduleId }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+
+    closeModuleSelector();
+    if (typeof showToast === 'function') showToast('online', `📦 Módulo vinculado ao perfil #${profileId}!`);
+    renderModalAssignments(); // Recarrega tabela
+  } catch (err) {
+    alert(`Erro ao vincular módulo: ${err.message}`);
+  }
+}
+
+async function unlinkModule(profileId) {
+  try {
+    const res = await fetch(`/api/profiles/${profileId}/module`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+
+    closeModuleSelector();
+    if (typeof showToast === 'function') showToast('offline', `❌ Módulo desvinculado do perfil #${profileId}`);
+    renderModalAssignments();
+  } catch (err) {
+    alert(`Erro ao desvincular módulo: ${err.message}`);
+  }
+}
+
 // Expõe funções globais usadas no onclick inline da tabela
 window.editProfilePrompt = editProfilePrompt;
 window.deleteProfile = deleteProfile;
 window.openAssignBotModal = openAssignBotModal;
+window.openModuleSelector = openModuleSelector;
+window.closeModuleSelector = closeModuleSelector;
+window.selectModuleForProfile = selectModuleForProfile;
+window.unlinkModule = unlinkModule;
