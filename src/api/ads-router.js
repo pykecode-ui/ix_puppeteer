@@ -141,8 +141,12 @@ function createAdsRouter(io) {
         ad_title: req.body.adTitle || req.body.ad_title,
         ad_description: req.body.adDescription || req.body.ad_description,
         data_pcu: req.body.dataPcu || req.body.data_pcu,
+        data_rw: req.body.dataRw || req.body.data_rw,
         data_ta_slot: req.body.dataTaSlot || req.body.data_ta_slot,
         data_ta_slot_pos: req.body.dataTaSlotPos || req.body.data_ta_slot_pos,
+        geo_country: req.body.geo_country,
+        geo_region: req.body.geo_region,
+        geo_city: req.body.geo_city,
         is_whitelisted: req.body.isWhitelisted || req.body.is_whitelisted || false,
         is_blacklisted: req.body.isBlacklisted || req.body.is_blacklisted || false,
         whitelist_rule_id: req.body.whitelistRuleId || req.body.whitelist_rule_id,
@@ -173,10 +177,10 @@ function createAdsRouter(io) {
     }
   });
 
-  // Excluir um anúncio
-  router.delete('/ads/:id', (req, res) => {
+  // Limpar todos os anúncios (DEVE vir antes de /ads/:id)
+  router.delete('/ads/clear-all', (req, res) => {
     try {
-      adsModels.deleteAd(Number(req.params.id));
+      adsModels.deleteAllAds();
       if (io) io.emit('ads:updated');
       res.json({ ok: true });
     } catch (err) {
@@ -184,10 +188,10 @@ function createAdsRouter(io) {
     }
   });
 
-  // Limpar todos os anúncios
-  router.delete('/ads/clear-all', (req, res) => {
+  // Excluir um anúncio
+  router.delete('/ads/:id', (req, res) => {
     try {
-      adsModels.deleteAllAds();
+      adsModels.deleteAd(Number(req.params.id));
       if (io) io.emit('ads:updated');
       res.json({ ok: true });
     } catch (err) {
@@ -328,6 +332,57 @@ function createAdsRouter(io) {
       adsModels.deleteBlacklistRule(Number(req.params.id));
       if (io) io.emit('ads:blacklist:updated');
       res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BLACKLIST — Sincronização em lote (textarea do modal)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  router.post('/ads/blacklist/bulk-sync', (req, res) => {
+    try {
+      const { patterns } = req.body; // array de strings
+      if (!Array.isArray(patterns)) {
+        return res.status(400).json({ ok: false, error: 'patterns deve ser um array.' });
+      }
+
+      const db = adsModels.getAdsDB();
+
+      // 1. Remove todas as regras atuais
+      db.prepare('DELETE FROM blacklist_rules').run();
+
+      // 2. Insere as novas
+      const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+      const insert = db.prepare(`
+        INSERT INTO blacklist_rules (pattern, match_type, description, priority, action, created_at, updated_at)
+        VALUES (?, 'substring', 'Blacklist (modal)', 0, 'flag', ?, ?)
+      `);
+      const insertMany = db.transaction((items) => {
+        for (const p of items) insert.run(p, now, now);
+      });
+      const cleanPatterns = patterns.map(p => p.trim()).filter(Boolean);
+      insertMany(cleanPatterns);
+
+      // 3. Re-aplica blacklist em todos os anúncios existentes
+      //    Primeiro limpa todas as flags de blacklist
+      db.prepare('UPDATE serp_ads SET is_blacklisted = 0, blacklist_rule_id = NULL').run();
+
+      //    Depois marca os que contêm algum pattern no display_url ou data_pcu
+      const rules = db.prepare('SELECT id, pattern FROM blacklist_rules WHERE is_active = 1').all();
+      for (const rule of rules) {
+        const like = `%${rule.pattern}%`;
+        db.prepare(`
+          UPDATE serp_ads
+          SET is_blacklisted = 1, blacklist_rule_id = ?
+          WHERE (LOWER(display_url) LIKE LOWER(?) OR LOWER(data_pcu) LIKE LOWER(?) OR LOWER(href_decoded) LIKE LOWER(?))
+            AND is_blacklisted = 0
+        `).run(rule.id, like, like, like);
+      }
+
+      if (io) io.emit('ads:blacklist:updated');
+      res.json({ ok: true, count: cleanPatterns.length });
     } catch (err) {
       res.status(500).json({ ok: false, error: err.message });
     }

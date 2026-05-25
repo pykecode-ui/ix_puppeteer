@@ -419,12 +419,13 @@
               <div class="stat-label">Keywords</div>
             </div>
           </div>
-          <div class="stat-card">
+          <div class="stat-card" style="position:relative;">
             <div class="stat-icon red" aria-hidden="true">🚨</div>
             <div class="stat-info">
               <div class="stat-value" id="statBlacklistedAds">0</div>
               <div class="stat-label">Blacklisted</div>
             </div>
+            <button class="blacklist-config-btn" id="btnOpenBlacklist" title="Configurar Blacklist">⚙️</button>
           </div>
         </div>
 
@@ -741,6 +742,37 @@
     </div>
   </div>
 
+  <!-- Modal Blacklist (fora de qualquer seção para não ser destruído por re-renders) -->
+  <div id="blacklistModalOverlay" class="modal-overlay">
+    <div class="modal-dialog" style="max-width:520px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:18px;">🚨</span>
+          <span class="modal-title">Configurar Blacklist</span>
+        </div>
+        <button class="modal-close-btn" id="btnCloseBlacklist">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:13px; color:var(--text-secondary); margin-bottom:12px;">
+          Adicione uma palavra por linha. Se o domínio do anúncio (display_url, data-pcu ou link) <strong>contiver</strong> a palavra, será marcado como 🚨 Blacklisted.
+        </p>
+        <textarea
+          id="blacklistTextarea"
+          class="blacklist-textarea"
+          placeholder="exemplo.com.br&#10;concorrente&#10;siteruim"
+          rows="12"
+        ></textarea>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;">
+          <span id="blacklistWordCount" style="font-size:12px; color:var(--text-secondary);">0 regras</span>
+          <div style="display:flex; gap:8px;">
+            <button class="toolbar-btn" id="btnCancelBlacklist">Cancelar</button>
+            <button class="btn btn-primary" id="btnSaveBlacklist" style="font-size:13px; padding:6px 18px;">💾 Salvar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Socket.io (injetado pelo servidor Express) -->
   <script src="/socket.io/socket.io.js"></script>
   <!-- Módulo de conexão socket -->
@@ -753,5 +785,6 @@
   <script src="/js/palavras.js"></script>
   <!-- Módulo de anúncios -->
   <script src="/js/anuncios.js"></script>
+
 </body>
 </html>

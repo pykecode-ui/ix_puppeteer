@@ -412,6 +412,8 @@ async function renderModalAssignments() {
           <th style="text-align:center;">Status</th>
           <th>Nome</th>
           <th style="text-align:center;">Módulo</th>
+          <th>País</th>
+          <th>Estado / Cidade</th>
           <th>Anotações</th>
           <th style="text-align:center;">Atribuído</th>
           <th style="text-align:center;">Aberturas</th>
@@ -436,6 +438,11 @@ async function renderModalAssignments() {
             ? `<span class="module-link-badge linked" title="Módulo: ${escapeHtml(linkedModule.label)}">${escapeHtml(linkedModule.label)}</span>`
             : `<span class="module-link-badge unlinked">—</span>`;
 
+          const geoCountry = bpInfo.geo_country || '';
+          const geoRegion = bpInfo.geo_region || '';
+          const geoCity = bpInfo.geo_city || '';
+          const geoRegionCity = [geoRegion, geoCity].filter(Boolean).join(' / ');
+
           return `
           <tr class="${checked ? 'assign-row-active' : ''}">
             <td style="text-align:center;">
@@ -457,6 +464,8 @@ async function renderModalAssignments() {
                 <button class="module-link-btn" onclick="openModuleSelector(${p.profile_id})" title="Vincular módulo">📦</button>
               </div>
             </td>
+            <td>${geoCountry ? `<span class="geo-badge geo-country">🌍 ${escapeHtml(geoCountry)}</span>` : '<span class="dim-text">—</span>'}</td>
+            <td>${geoRegionCity ? `<span class="geo-badge geo-region">📍 ${escapeHtml(geoRegionCity)}</span>` : '<span class="dim-text">—</span>'}</td>
             <td>${escapeHtml(p.notes) || '<span class="dim-text">—</span>'}</td>
             <td style="text-align:center;">
               <span class="assign-status-badge ${checked ? 'assigned' : 'unassigned'}">

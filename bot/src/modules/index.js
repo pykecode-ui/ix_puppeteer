@@ -12,6 +12,9 @@ const client = require('../api/dashboard-client');
 // ── Referência ao botId (injetado ao inicializar) ───────────────────────────
 let BOT_ID = null;
 
+// ── Cache de geolocalização por perfil ──────────────────────────────────────
+const profileGeoCache = {};
+
 /**
  * Inicializa o dispatcher com o ID deste bot.
  * @param {string} botId
@@ -67,6 +70,37 @@ const COMMANDS = {
       wsEndpoint: profileData.ws,
       currentUrl,
     });
+
+    // 5. Extrai geolocalização da página padrão do ixBrowser (IP-API)
+    try {
+      // Aguarda o elemento #country ficar preenchido (a página faz XHR para ip-api)
+      await page.waitForFunction(
+        () => {
+          const el = document.getElementById('country');
+          return el && el.textContent && el.textContent.trim().length > 0 && el.textContent.trim() !== '----';
+        },
+        { timeout: 12000 }
+      );
+
+      const geo = await page.evaluate(() => {
+        const country = (document.getElementById('country')?.textContent || '').trim();
+        const region = (document.getElementById('region')?.textContent || '').trim();
+        const city = (document.getElementById('city')?.textContent || '').trim();
+        return { country, region, city };
+      });
+
+      if (geo.country) {
+        log('info', `🌍 Geo: ${geo.country} / ${geo.region} / ${geo.city}`);
+        profileGeoCache[profileId] = geo;
+        client.sendStatus(BOT_ID, {
+          profileId,
+          status: 'geo_update',
+          geo,
+        });
+      }
+    } catch (geoErr) {
+      log('warn', `⚠️ Não foi possível extrair geolocalização: ${geoErr.message}`);
+    }
 
     return { ok: true, profileId, ws: profileData.ws, currentUrl };
   },
@@ -257,6 +291,7 @@ const COMMANDS = {
       rounds: rounds || 1,
       searchMethod: searchMethod || 'direct_url',
       twoCaptchaKey: twoCaptchaKey || '',
+      geo: profileGeoCache[profileId] || null,
     });
 
     // Armazena referência para poder cancelar

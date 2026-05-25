@@ -113,58 +113,100 @@ function renderAdsTable() {
   table.innerHTML = `
     <thead>
       <tr>
-        <th style="width:50px; text-align:center;">#</th>
+        <th style="text-align:center; width:55px;">Vezes</th>
         <th style="text-align:center; width:70px;">Posição</th>
-        <th>Keyword</th>
+        <th>Keywords</th>
         <th>Título do Anúncio</th>
         <th>URL de Exibição</th>
-        <th>Link Real</th>
+        <th>data-pcu</th>
+        <th>data-rw</th>
+        <th>País</th>
+        <th>Estado / Cidade</th>
         <th style="text-align:center; width:60px;">Flags</th>
-        <th style="width:130px;">Encontrado em</th>
+        <th style="width:130px;">Última vez</th>
         <th style="width:50px; text-align:center;">Ação</th>
       </tr>
     </thead>
     <tbody>
-      ${adsState.ads.map(ad => `
-        <tr data-ad-id="${ad.id}" class="${ad.is_blacklisted ? 'ad-row-blacklisted' : ''}${ad.is_whitelisted ? 'ad-row-whitelisted' : ''}">
-          <td style="text-align:center; font-family:var(--font-mono); font-size:12px; color:var(--text-secondary);">${ad.id}</td>
+      ${adsState.ads.map(ad => {
+        const reps = ad.repetitions || 1;
+        const repClass = reps >= 5 ? 'rep-high' : reps >= 2 ? 'rep-mid' : 'rep-low';
+        const kwList = (ad.keywords || ad.keyword || '').split(',').filter(Boolean);
+        const kwChips = kwList.map(kw => `<span class="ad-keyword-chip" title="${escapeHtmlAds(kw.trim())}">${escapeHtmlAds(kw.trim())}</span>`).join(' ');
+
+        const pcuVal = ad.data_pcu || '';
+        const rwVal = ad.data_rw || '';
+
+        return `
+        <tr data-ad-ids="${ad.all_ids || ad.id}" class="${ad.is_blacklisted ? 'ad-row-blacklisted' : ''}${ad.is_whitelisted ? 'ad-row-whitelisted' : ''}">
+          <td style="text-align:center;">
+            <span class="ad-rep-badge ${repClass}">${reps}x</span>
+          </td>
           <td style="text-align:center;">${positionBadge(ad.position)}</td>
           <td>
-            <span class="ad-keyword-chip" title="${escapeHtmlAds(ad.keyword)}">${escapeHtmlAds(ad.keyword)}</span>
+            <div class="ad-keywords-wrap">${kwChips}</div>
           </td>
           <td>
             <div class="ad-title-cell" title="${escapeHtmlAds(ad.ad_title)}">${escapeHtmlAds(truncate(ad.ad_title, 50))}</div>
             ${ad.ad_description ? `<div class="ad-desc-cell">${escapeHtmlAds(truncate(ad.ad_description, 70))}</div>` : ''}
           </td>
           <td>
-            <span class="ad-display-url" title="${escapeHtmlAds(ad.display_url)}">${escapeHtmlAds(truncate(ad.display_url, 40))}</span>
+            <span class="ad-display-url" title="${escapeHtmlAds(ad.display_url)}">${escapeHtmlAds(truncate(ad.display_url, 35))}</span>
           </td>
           <td>
-            ${ad.href_decoded
-              ? `<a href="${escapeHtmlAds(ad.href_decoded)}" target="_blank" rel="noopener" class="ad-link" title="${escapeHtmlAds(ad.href_decoded)}">${escapeHtmlAds(truncate(ad.href_decoded, 45))}</a>`
+            ${pcuVal
+              ? `<div class="ad-data-cell">
+                   <a href="${escapeHtmlAds(pcuVal)}" target="_blank" rel="noopener" class="ad-link ad-data-link" title="${escapeHtmlAds(pcuVal)}">data-pcu</a>
+                   <button class="ad-copy-btn" data-copy="${escapeHtmlAds(pcuVal)}" title="Copiar data-pcu">📋</button>
+                 </div>`
               : '<span class="dim-text">—</span>'
             }
           </td>
+          <td>
+            ${rwVal
+              ? `<div class="ad-data-cell">
+                   <a href="${escapeHtmlAds(rwVal)}" target="_blank" rel="noopener" class="ad-link ad-data-link" title="${escapeHtmlAds(rwVal)}">data-rw</a>
+                   <button class="ad-copy-btn" data-copy="${escapeHtmlAds(rwVal)}" title="Copiar data-rw">📋</button>
+                 </div>`
+              : '<span class="dim-text">—</span>'
+            }
+          </td>
+          <td>${ad.geo_country ? `<span class="geo-badge geo-country">🌍 ${escapeHtmlAds(ad.geo_country)}</span>` : '<span class="dim-text">—</span>'}</td>
+          <td>${(ad.geo_region || ad.geo_city) ? `<span class="geo-badge geo-region">📍 ${escapeHtmlAds([ad.geo_region, ad.geo_city].filter(Boolean).join(' / '))}</span>` : '<span class="dim-text">—</span>'}</td>
           <td style="text-align:center;">${flagBadges(ad)}</td>
           <td style="font-size:12px; color:var(--text-secondary);">${ad.found_at || '—'}</td>
           <td style="text-align:center;">
-            <button class="toolbar-btn ad-delete-btn" data-ad-id="${ad.id}" title="Excluir anúncio" style="padding:4px 8px; font-size:12px;">🗑</button>
+            <button class="toolbar-btn ad-delete-btn" data-ad-ids="${ad.all_ids || ad.id}" title="Excluir anúncio (${reps} registro${reps > 1 ? 's' : ''})" style="padding:4px 8px; font-size:12px;">🗑</button>
           </td>
         </tr>
-      `).join('')}
+      `}).join('')}
     </tbody>
   `;
 
   container.innerHTML = '';
   container.appendChild(table);
 
-  // Bind delete buttons
+  // Bind copy buttons
+  table.querySelectorAll('.ad-copy-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const text = btn.dataset.copy;
+      navigator.clipboard.writeText(text).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = '✅';
+        setTimeout(() => { btn.textContent = orig; }, 1200);
+      }).catch(() => {});
+    });
+  });
+
+  // Bind delete buttons — exclui todos os IDs do grupo
   table.querySelectorAll('.ad-delete-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
-      const adId = btn.dataset.adId;
-      if (!confirm(`Excluir anúncio #${adId}?`)) return;
+      const ids = (btn.dataset.adIds || '').split(',').map(Number).filter(Boolean);
+      const count = ids.length;
+      if (!confirm(`Excluir ${count} registro${count > 1 ? 's' : ''} deste anúncio?`)) return;
       try {
-        await fetch(`/api/ads/${adId}`, { method: 'DELETE' });
+        await Promise.all(ids.map(id => fetch(`/api/ads/${id}`, { method: 'DELETE' })));
         loadAds();
         loadAdsStats();
       } catch (_) {}
@@ -347,3 +389,96 @@ if (anunciosSection) {
 
 // Carrega stats na inicialização (para o badge do nav)
 loadAdsStats();
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BLACKLIST MODAL
+// ══════════════════════════════════════════════════════════════════════════════
+
+(function initBlacklistModal() {
+  const overlay = document.getElementById('blacklistModalOverlay');
+  const textarea = document.getElementById('blacklistTextarea');
+  const wordCount = document.getElementById('blacklistWordCount');
+  const btnOpen = document.getElementById('btnOpenBlacklist');
+  const btnClose = document.getElementById('btnCloseBlacklist');
+  const btnCancel = document.getElementById('btnCancelBlacklist');
+  const btnSave = document.getElementById('btnSaveBlacklist');
+
+  if (!overlay || !textarea || !btnOpen) return;
+
+  function updateWordCount() {
+    const lines = textarea.value.split('\n').map(l => l.trim()).filter(Boolean);
+    wordCount.textContent = `${lines.length} regra${lines.length !== 1 ? 's' : ''}`;
+  }
+
+  async function loadBlacklistRules() {
+    try {
+      const res = await fetch('/api/ads/blacklist');
+      const data = await res.json();
+      if (data.ok && data.rules) {
+        textarea.value = data.rules.map(r => r.pattern).join('\n');
+      }
+    } catch (_) {}
+    updateWordCount();
+  }
+
+  // Abrir modal
+  btnOpen.addEventListener('click', () => {
+    overlay.classList.add('visible');
+    loadBlacklistRules();
+    setTimeout(() => textarea.focus(), 100);
+  });
+
+  // Fechar modal
+  function closeModal() {
+    overlay.classList.remove('visible');
+  }
+
+  btnClose.addEventListener('click', closeModal);
+  btnCancel.addEventListener('click', closeModal);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && overlay.classList.contains('visible')) closeModal();
+  });
+
+  textarea.addEventListener('input', updateWordCount);
+
+  btnSave.addEventListener('click', async () => {
+    const lines = textarea.value.split('\n').map(l => l.trim()).filter(Boolean);
+    btnSave.disabled = true;
+    btnSave.textContent = '⏳ Salvando...';
+
+    try {
+      const res = await fetch('/api/ads/blacklist/bulk-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patterns: lines }),
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        closeModal();
+        loadAds();
+        loadAdsStats();
+      } else {
+        alert('Erro: ' + (data.error || 'Falha ao salvar'));
+      }
+    } catch (err) {
+      alert('Erro de rede: ' + err.message);
+    } finally {
+      btnSave.disabled = false;
+      btnSave.textContent = '💾 Salvar';
+    }
+  });
+
+  if (typeof socket !== 'undefined') {
+    socket.on('ads:blacklist:updated', () => {
+      if (!overlay.classList.contains('visible')) {
+        loadAds();
+        loadAdsStats();
+      }
+    });
+  }
+})();
+

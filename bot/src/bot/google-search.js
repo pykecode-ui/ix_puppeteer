@@ -482,6 +482,7 @@ async function harvestSerpAds(page, log = console.log) {
 
         // Dados do slot
         const dataPcu = (primaryLink.getAttribute('data-pcu') || '').trim();
+        const dataRw = (primaryLink.getAttribute('data-rw') || '').trim();
         const dataTaSlot = (el.getAttribute('data-ta-slot') || '').trim();
         const dataTaSlotPos = (el.getAttribute('data-ta-slot-pos') || '').trim();
 
@@ -505,7 +506,7 @@ async function harvestSerpAds(page, log = console.log) {
           if (position === 'unknown') slotLabel = 'Anúncio';
         }
 
-        return { href, adTitle, displayUrl, adDescription, dataPcu, dataTaSlot, dataTaSlotPos, position, slotLabel };
+        return { href, adTitle, displayUrl, adDescription, dataPcu, dataRw, dataTaSlot, dataTaSlotPos, position, slotLabel };
       });
 
       return data;

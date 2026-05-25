@@ -67,6 +67,9 @@ class SearchWorker {
     // Captcha solver
     this.captchaSolver = new CaptchaSolver(opts.twoCaptchaKey || '');
 
+    // Geolocalização do perfil (extraída ao abrir)
+    this.geo = opts.geo || null;
+
     // Estado
     this._running = false;
     this._cancelled = false;
@@ -355,6 +358,9 @@ class SearchWorker {
                 profile_id: this.profileId,
                 module_id: this.moduleId,
                 keyword: keyword,
+                geo_country: this.geo?.country || null,
+                geo_region: this.geo?.region || null,
+                geo_city: this.geo?.city || null,
                 ...ad,
               });
             } catch (_) {

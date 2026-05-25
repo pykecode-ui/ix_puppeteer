@@ -265,17 +265,43 @@ function ensureBotProfile(botId, profileId) {
  * @param {string} wsEndpoint
  * @param {string} currentUrl
  */
-function recordBotProfileOpen(botId, profileId, wsEndpoint = null, currentUrl = null) {
+function recordBotProfileOpen(botId, profileId, wsEndpoint = null, currentUrl = null, geo = null) {
   ensureBotProfile(botId, profileId);
+  const now = nowBrasilia();
+  if (geo && geo.country) {
+    getDB()
+      .prepare(`
+        UPDATE bot_profiles
+        SET status = 'open', ws_endpoint = ?, current_url = ?,
+            open_count = open_count + 1, last_opened_at = ?, updated_at = ?,
+            geo_country = ?, geo_region = ?, geo_city = ?
+        WHERE bot_id = ? AND profile_id = ?
+      `)
+      .run(wsEndpoint, currentUrl, now, now, geo.country, geo.region || null, geo.city || null, botId, profileId);
+  } else {
+    getDB()
+      .prepare(`
+        UPDATE bot_profiles
+        SET status = 'open', ws_endpoint = ?, current_url = ?,
+            open_count = open_count + 1, last_opened_at = ?, updated_at = ?
+        WHERE bot_id = ? AND profile_id = ?
+      `)
+      .run(wsEndpoint, currentUrl, now, now, botId, profileId);
+  }
+}
+
+/**
+ * Atualiza geolocalização de um perfil (após extrair da página padrão do ixBrowser).
+ */
+function updateBotProfileGeo(botId, profileId, geo) {
   const now = nowBrasilia();
   getDB()
     .prepare(`
       UPDATE bot_profiles
-      SET status = 'open', ws_endpoint = ?, current_url = ?,
-          open_count = open_count + 1, last_opened_at = ?, updated_at = ?
+      SET geo_country = ?, geo_region = ?, geo_city = ?, updated_at = ?
       WHERE bot_id = ? AND profile_id = ?
     `)
-    .run(wsEndpoint, currentUrl, now, now, botId, profileId);
+    .run(geo.country || null, geo.region || null, geo.city || null, now, botId, profileId);
 }
 
 /**
@@ -679,6 +705,7 @@ module.exports = {
   // Bot profiles
   ensureBotProfile,
   recordBotProfileOpen,
+  updateBotProfileGeo,
   recordBotProfileClose,
   getBotProfiles,
   syncBotProfiles,

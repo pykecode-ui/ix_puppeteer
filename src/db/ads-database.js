@@ -120,8 +120,12 @@ function initAdsDB() {
       ad_title          TEXT,
       ad_description    TEXT,
       data_pcu          TEXT,
+      data_rw           TEXT,
       data_ta_slot      TEXT,
       data_ta_slot_pos  TEXT,
+      geo_country       TEXT,
+      geo_region        TEXT,
+      geo_city          TEXT,
       is_whitelisted    INTEGER NOT NULL DEFAULT 0,
       is_blacklisted    INTEGER NOT NULL DEFAULT 0,
       whitelist_rule_id INTEGER,
@@ -133,6 +137,17 @@ function initAdsDB() {
       FOREIGN KEY (blacklist_rule_id) REFERENCES blacklist_rules(id) ON DELETE SET NULL
     )
   `);
+
+  // Migration: adiciona data_rw se não existir (para DBs criados antes)
+  try {
+    adsDb.exec(`ALTER TABLE serp_ads ADD COLUMN data_rw TEXT`);
+  } catch (_) { /* coluna já existe */ }
+
+  // Migration: geolocalização do IP nos anúncios
+  try { adsDb.exec(`ALTER TABLE serp_ads ADD COLUMN geo_country TEXT`); } catch (_) {}
+  try { adsDb.exec(`ALTER TABLE serp_ads ADD COLUMN geo_region TEXT`); } catch (_) {}
+  try { adsDb.exec(`ALTER TABLE serp_ads ADD COLUMN geo_city TEXT`); } catch (_) {}
+
   // position: 'top' | 'bottom' | 'middle' | 'shopping' | 'unknown'
 
   // ═══════════════════════════════════════════════════════════════════════════

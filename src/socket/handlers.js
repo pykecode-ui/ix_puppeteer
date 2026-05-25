@@ -67,15 +67,18 @@ function registerHandlers(socket, io) {
 
   // Bot envia atualização de status em tempo real
   socket.on('bot:status', (data) => {
-    const { botId, profileId, status, wsEndpoint, currentUrl } = data;
+    const { botId, profileId, status, wsEndpoint, currentUrl, geo } = data;
     if (!botId) return;
 
     // Persiste no banco conforme o status do perfil
     if (profileId) {
       if (status === 'open') {
-        models.recordBotProfileOpen(botId, profileId, wsEndpoint, currentUrl);
+        models.recordBotProfileOpen(botId, profileId, wsEndpoint, currentUrl, geo || null);
       } else if (status === 'closed') {
         models.recordBotProfileClose(botId, profileId);
+      } else if (status === 'geo_update' && geo) {
+        // Atualização de geolocalização apenas (sem mudar status)
+        models.updateBotProfileGeo(botId, profileId, geo);
       }
     }
 

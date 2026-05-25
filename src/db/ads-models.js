@@ -130,7 +130,8 @@ function getSessionExecutions(sessionId) {
 function createSerpAd({
   execution_id, session_id, keyword, position, slot_label, slot_index,
   href_raw, href_decoded, display_url, ad_title, ad_description,
-  data_pcu, data_ta_slot, data_ta_slot_pos,
+  data_pcu, data_rw, data_ta_slot, data_ta_slot_pos,
+  geo_country, geo_region, geo_city,
   is_whitelisted, is_blacklisted, whitelist_rule_id, blacklist_rule_id,
 }) {
   const now = nowBrasilia();
@@ -138,16 +139,18 @@ function createSerpAd({
     INSERT INTO serp_ads (
       execution_id, session_id, keyword, position, slot_label, slot_index,
       href_raw, href_decoded, display_url, ad_title, ad_description,
-      data_pcu, data_ta_slot, data_ta_slot_pos,
+      data_pcu, data_rw, data_ta_slot, data_ta_slot_pos,
+      geo_country, geo_region, geo_city,
       is_whitelisted, is_blacklisted, whitelist_rule_id, blacklist_rule_id,
       found_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     execution_id, session_id, keyword,
     position || 'unknown', slot_label || null, slot_index || null,
     href_raw || null, href_decoded || null, display_url || null,
     ad_title || null, ad_description || null,
-    data_pcu || null, data_ta_slot || null, data_ta_slot_pos || null,
+    data_pcu || null, data_rw || null, data_ta_slot || null, data_ta_slot_pos || null,
+    geo_country || null, geo_region || null, geo_city || null,
     is_whitelisted ? 1 : 0, is_blacklisted ? 1 : 0,
     whitelist_rule_id || null, blacklist_rule_id || null,
     now,
@@ -487,10 +490,43 @@ function getAllAds({ limit = 50, offset = 0, keyword, domain } = {}) {
 
   const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
 
-  const total = db.prepare(`SELECT COUNT(*) AS count FROM serp_ads ${whereClause}`).get(...params).count;
+  // Agrupa por display_url + ad_title para eliminar duplicatas
+  const total = db.prepare(`
+    SELECT COUNT(*) AS count FROM (
+      SELECT 1 FROM serp_ads ${whereClause}
+      GROUP BY COALESCE(display_url, ''), COALESCE(ad_title, '')
+    )
+  `).get(...params).count;
+
   const ads = db.prepare(`
-    SELECT * FROM serp_ads ${whereClause}
-    ORDER BY id DESC LIMIT ? OFFSET ?
+    SELECT
+      MAX(id) AS id,
+      COUNT(*) AS repetitions,
+      GROUP_CONCAT(DISTINCT keyword) AS keywords,
+      keyword,
+      position,
+      slot_label,
+      href_raw,
+      href_decoded,
+      display_url,
+      ad_title,
+      ad_description,
+      data_pcu,
+      data_rw,
+      geo_country,
+      geo_region,
+      geo_city,
+      MAX(is_whitelisted) AS is_whitelisted,
+      MAX(is_blacklisted) AS is_blacklisted,
+      MAX(was_clicked) AS was_clicked,
+      SUM(click_count) AS click_count,
+      MIN(found_at) AS first_found_at,
+      MAX(found_at) AS found_at,
+      GROUP_CONCAT(id) AS all_ids
+    FROM serp_ads ${whereClause}
+    GROUP BY COALESCE(display_url, ''), COALESCE(ad_title, '')
+    ORDER BY MAX(id) DESC
+    LIMIT ? OFFSET ?
   `).all(...params, limit, offset);
 
   return { ads, total };
@@ -559,4 +595,6 @@ module.exports = {
   getAllAds,
   deleteAd,
   deleteAllAds,
+  // DB access (for bulk operations)
+  getAdsDB,
 };

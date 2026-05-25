@@ -146,6 +146,11 @@ function initDatabase() {
   try { db.exec(`ALTER TABLE ix_profiles ADD COLUMN open_count INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
   try { db.exec(`ALTER TABLE ix_profiles ADD COLUMN last_opened_at TEXT`); } catch (_) {}
 
+  // Migration: geolocalização do IP nos perfis (país, estado, cidade)
+  try { db.exec(`ALTER TABLE bot_profiles ADD COLUMN geo_country TEXT`); } catch (_) {}
+  try { db.exec(`ALTER TABLE bot_profiles ADD COLUMN geo_region TEXT`); } catch (_) {}
+  try { db.exec(`ALTER TABLE bot_profiles ADD COLUMN geo_city TEXT`); } catch (_) {}
+
   // Tabela: atribuição de perfis a bots (quais perfis um bot irá controlar)
   db.exec(`
     CREATE TABLE IF NOT EXISTS bot_profile_assignments (
