@@ -398,34 +398,53 @@
 
         <!-- Stats Row -->
         <div class="stats-row">
-          <div class="stat-card">
-            <div class="stat-icon purple" aria-hidden="true">📢</div>
+          <div class="stat-card" style="position:relative;">
+            <div class="stat-icon purple" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 13v-2Z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
+            </div>
             <div class="stat-info">
               <div class="stat-value" id="statTotalAds">0</div>
               <div class="stat-label">Total Anúncios</div>
             </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon green" aria-hidden="true">🔗</div>
-            <div class="stat-info">
-              <div class="stat-value" id="statUniqueDomains">0</div>
-              <div class="stat-label">Domínios</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon yellow" aria-hidden="true">🔎</div>
-            <div class="stat-info">
-              <div class="stat-value" id="statUniqueKeywords">0</div>
-              <div class="stat-label">Keywords</div>
+            <div class="stat-card-actions">
+              <a href="/todos.html" target="_blank" class="stat-card-btn total-btn" title="Visualizar todos os anúncios em tela cheia">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              </a>
             </div>
           </div>
           <div class="stat-card" style="position:relative;">
-            <div class="stat-icon red" aria-hidden="true">🚨</div>
+            <div class="stat-icon red" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </div>
             <div class="stat-info">
               <div class="stat-value" id="statBlacklistedAds">0</div>
               <div class="stat-label">Blacklisted</div>
             </div>
-            <button class="blacklist-config-btn" id="btnOpenBlacklist" title="Configurar Blacklist">⚙️</button>
+            <div class="stat-card-actions">
+              <a href="/blacklist.html" target="_blank" class="stat-card-btn blacklist-btn" title="Visualizar anúncios da Blacklist em tela cheia">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              </a>
+              <button class="stat-card-btn config-btn blacklist-btn" id="btnOpenBlacklist" title="Configurar Blacklist">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="stat-card" style="position:relative;">
+            <div class="stat-icon green" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 11 2 2 4-4"/></svg>
+            </div>
+            <div class="stat-info">
+              <div class="stat-value" id="statWhitelistedAds">0</div>
+              <div class="stat-label">Safelist</div>
+            </div>
+            <div class="stat-card-actions">
+              <a href="/safelist.html" target="_blank" class="stat-card-btn safelist-btn" title="Visualizar anúncios da Safelist em tela cheia">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              </a>
+              <button class="stat-card-btn config-btn safelist-btn" id="btnOpenWhitelist" title="Configurar Safelist">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -800,6 +819,61 @@
             <button class="toolbar-btn" id="btnCancelBlacklist">Cancelar</button>
             <button class="btn btn-primary" id="btnSaveBlacklist" style="font-size:13px; padding:6px 18px;">💾 Salvar</button>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Whitelist/Safelist -->
+  <div id="whitelistModalOverlay" class="modal-overlay">
+    <div class="modal-dialog" style="max-width:520px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:18px;">🛡️</span>
+          <span class="modal-title">Configurar Safelist</span>
+        </div>
+        <button class="modal-close-btn" id="btnCloseWhitelist">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:13px; color:var(--text-secondary); margin-bottom:12px;">
+          Adicione uma palavra por linha. Se o domínio do anúncio (display_url, data-pcu ou link) <strong>contiver</strong> a palavra, será marcado como 🛡️ Safe e exibido em verde.
+        </p>
+        <textarea
+          id="whitelistTextarea"
+          class="blacklist-textarea"
+          placeholder="exemplo.com.br&#10;parceiro&#10;siteconfiavel"
+          rows="12"
+        ></textarea>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;">
+          <span id="whitelistWordCount" style="font-size:12px; color:var(--text-secondary);">0 regras</span>
+          <div style="display:flex; gap:8px;">
+            <button class="toolbar-btn" id="btnCancelWhitelist">Cancelar</button>
+            <button class="btn btn-primary" id="btnSaveWhitelist" style="font-size:13px; padding:6px 18px;">💾 Salvar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Títulos dos Anúncios (exibe todos os títulos de um domínio agrupados) -->
+  <div id="adTitlesModalOverlay" class="modal-overlay">
+    <div class="modal-dialog" style="max-width:520px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:18px;">📋</span>
+          <span class="modal-title">Títulos Registrados</span>
+        </div>
+        <button class="modal-close-btn" id="btnCloseAdTitles">✕</button>
+      </div>
+      <div class="modal-body" style="padding-top:10px;">
+        <div style="margin-bottom:12px;">
+          <strong id="adTitlesDomainLabel" style="font-size:14px; color:var(--accent); word-break:break-all;">dominio.com.br</strong>
+        </div>
+        <ul class="ad-titles-list" id="adTitlesListContainer" style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px; max-height:300px; overflow-y:auto;">
+          <!-- Títulos dinâmicos entrarão aqui -->
+        </ul>
+        <div style="display:flex; justify-content:flex-end; margin-top:16px;">
+          <button class="btn btn-secondary" id="btnCloseAdTitlesOk" style="font-size:13px; padding:6px 18px;">Fechar</button>
         </div>
       </div>
     </div>

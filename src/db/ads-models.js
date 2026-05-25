@@ -142,8 +142,8 @@ function createSerpAd({
       data_pcu, data_rw, data_ta_slot, data_ta_slot_pos,
       geo_country, geo_region, geo_city,
       is_whitelisted, is_blacklisted, whitelist_rule_id, blacklist_rule_id,
-      found_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      found_at, all_titles
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     execution_id, session_id, keyword,
     position || 'unknown', slot_label || null, slot_index || null,
@@ -154,6 +154,7 @@ function createSerpAd({
     is_whitelisted ? 1 : 0, is_blacklisted ? 1 : 0,
     whitelist_rule_id || null, blacklist_rule_id || null,
     now,
+    ad_title || null
   );
   return { id: info.lastInsertRowid, keyword, position, found_at: now };
 }
@@ -474,7 +475,7 @@ function buildAdHaystack({ href_raw, href_decoded, display_url, ad_title, ad_des
  * @param {string} domain - filtro opcional por domínio
  * @returns {{ads: Array, total: number}}
  */
-function getAllAds({ limit = 50, offset = 0, keyword, domain } = {}) {
+function getAllAds({ limit = 50, offset = 0, keyword, domain, is_blacklisted, is_whitelisted, orderBy = 'recent' } = {}) {
   const db = getAdsDB();
   let where = [];
   let params = [];
@@ -487,16 +488,26 @@ function getAllAds({ limit = 50, offset = 0, keyword, domain } = {}) {
     where.push('(display_url LIKE ? OR href_decoded LIKE ?)');
     params.push(`%${domain}%`, `%${domain}%`);
   }
+  if (is_blacklisted !== undefined) {
+    where.push('is_blacklisted = ?');
+    params.push(is_blacklisted ? 1 : 0);
+  }
+  if (is_whitelisted !== undefined) {
+    where.push('is_whitelisted = ?');
+    params.push(is_whitelisted ? 1 : 0);
+  }
 
   const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
 
-  // Agrupa por display_url + ad_title para eliminar duplicatas
+  // Agrupa por display_url para eliminar duplicatas
   const total = db.prepare(`
     SELECT COUNT(*) AS count FROM (
       SELECT 1 FROM serp_ads ${whereClause}
-      GROUP BY COALESCE(display_url, ''), COALESCE(ad_title, '')
+      GROUP BY COALESCE(display_url, '')
     )
   `).get(...params).count;
+
+  const orderClause = orderBy === 'repetitions' ? 'repetitions DESC, MAX(id) DESC' : 'MAX(id) DESC';
 
   const ads = db.prepare(`
     SELECT
@@ -522,10 +533,11 @@ function getAllAds({ limit = 50, offset = 0, keyword, domain } = {}) {
       SUM(click_count) AS click_count,
       MIN(found_at) AS first_found_at,
       MAX(found_at) AS found_at,
-      GROUP_CONCAT(id) AS all_ids
+      GROUP_CONCAT(id) AS all_ids,
+      GROUP_CONCAT(ad_title, ' ||| ') AS all_titles
     FROM serp_ads ${whereClause}
-    GROUP BY COALESCE(display_url, ''), COALESCE(ad_title, '')
-    ORDER BY MAX(id) DESC
+    GROUP BY COALESCE(display_url, '')
+    ORDER BY ${orderClause}
     LIMIT ? OFFSET ?
   `).all(...params, limit, offset);
 

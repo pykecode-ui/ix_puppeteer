@@ -170,7 +170,15 @@ function createAdsRouter(io) {
       const offset = parseInt(req.query.offset) || 0;
       const keyword = req.query.keyword || undefined;
       const domain = req.query.domain || undefined;
-      const result = adsModels.getAllAds({ limit, offset, keyword, domain });
+      const is_blacklisted = req.query.is_blacklisted !== undefined
+        ? req.query.is_blacklisted === 'true' || req.query.is_blacklisted === '1'
+        : undefined;
+      const is_whitelisted = req.query.is_whitelisted !== undefined
+        ? req.query.is_whitelisted === 'true' || req.query.is_whitelisted === '1'
+        : undefined;
+      const orderBy = req.query.orderBy || 'recent';
+
+      const result = adsModels.getAllAds({ limit, offset, keyword, domain, is_blacklisted, is_whitelisted, orderBy });
       res.json({ ok: true, ...result });
     } catch (err) {
       res.status(500).json({ ok: false, error: err.message });
@@ -382,6 +390,57 @@ function createAdsRouter(io) {
       }
 
       if (io) io.emit('ads:blacklist:updated');
+      res.json({ ok: true, count: cleanPatterns.length });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // WHITELIST / SAFELIST — Sincronização em lote (textarea do modal)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  router.post('/ads/whitelist/bulk-sync', (req, res) => {
+    try {
+      const { patterns } = req.body; // array de strings
+      if (!Array.isArray(patterns)) {
+        return res.status(400).json({ ok: false, error: 'patterns deve ser um array.' });
+      }
+
+      const db = adsModels.getAdsDB();
+
+      // 1. Remove todas as regras de whitelist atuais
+      db.prepare('DELETE FROM whitelist_rules').run();
+
+      // 2. Insere as novas regras
+      const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+      const insert = db.prepare(`
+        INSERT INTO whitelist_rules (pattern, match_type, description, created_at, updated_at)
+        VALUES (?, 'substring', 'Whitelist (modal)', ?, ?)
+      `);
+      const insertMany = db.transaction((items) => {
+        for (const p of items) insert.run(p, now, now);
+      });
+      const cleanPatterns = patterns.map(p => p.trim()).filter(Boolean);
+      insertMany(cleanPatterns);
+
+      // 3. Re-aplica whitelist em todos os anúncios existentes
+      //    Primeiro limpa todas as flags de whitelist
+      db.prepare('UPDATE serp_ads SET is_whitelisted = 0, whitelist_rule_id = NULL').run();
+
+      //    Depois marca os que contêm algum pattern no display_url, data_pcu ou href_decoded
+      const rules = db.prepare('SELECT id, pattern FROM whitelist_rules WHERE is_active = 1').all();
+      for (const rule of rules) {
+        const like = `%${rule.pattern}%`;
+        db.prepare(`
+          UPDATE serp_ads
+          SET is_whitelisted = 1, whitelist_rule_id = ?
+          WHERE (LOWER(display_url) LIKE LOWER(?) OR LOWER(data_pcu) LIKE LOWER(?) OR LOWER(href_decoded) LIKE LOWER(?))
+            AND is_whitelisted = 0
+        `).run(rule.id, like, like, like);
+      }
+
+      if (io) io.emit('ads:whitelist:updated');
       res.json({ ok: true, count: cleanPatterns.length });
     } catch (err) {
       res.status(500).json({ ok: false, error: err.message });

@@ -148,6 +148,9 @@ function initAdsDB() {
   try { adsDb.exec(`ALTER TABLE serp_ads ADD COLUMN geo_region TEXT`); } catch (_) {}
   try { adsDb.exec(`ALTER TABLE serp_ads ADD COLUMN geo_city TEXT`); } catch (_) {}
 
+  // Migration: adiciona all_titles para agrupar títulos por domínio
+  try { adsDb.exec(`ALTER TABLE serp_ads ADD COLUMN all_titles TEXT`); } catch (_) {}
+
   // position: 'top' | 'bottom' | 'middle' | 'shopping' | 'unknown'
 
   // ═══════════════════════════════════════════════════════════════════════════

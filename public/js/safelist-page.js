@@ -1,20 +1,21 @@
 /**
- * public/js/anuncios.js
+ * public/js/safelist-page.js
  * ─────────────────────────────────────────────────────────────────────────────
- * Módulo de Anúncios (#anuncios) — exibe resultados das pesquisas dos bots.
+ * Módulo da página dedicada de Anúncios na Safelist (Whitelist).
+ * Exibe apenas os anúncios marcados como seguros, com suporte a busca,
+ * ordenação, paginação e WebSocket para atualizações em tempo real.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 // ── Estado ──────────────────────────────────────────────────────────────────
-const adsState = {
+const safelistState = {
   ads: [],
   total: 0,
   page: 0,
   perPage: 30,
   filterKeyword: '',
   filterDomain: '',
-  stats: null,
-  topAdvertisers: [],
+  orderBy: 'recent' // 'recent' ou 'repetitions'
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -58,71 +59,54 @@ function flagBadges(ad) {
   return html || '<span class="dim-text">—</span>';
 }
 
-// ── Carregar Stats ──────────────────────────────────────────────────────────
-
-async function loadAdsStats() {
-  try {
-    const res = await fetch('/api/ads/stats');
-    const data = await res.json();
-    if (!data.ok) return;
-
-    adsState.stats = data.stats;
-    if (document.getElementById('statTotalAds')) {
-      document.getElementById('statTotalAds').textContent = data.stats.totalAds || 0;
-    }
-    if (document.getElementById('statUniqueDomains')) {
-      document.getElementById('statUniqueDomains').textContent = data.stats.uniqueDomains || 0;
-    }
-    if (document.getElementById('statUniqueKeywords')) {
-      document.getElementById('statUniqueKeywords').textContent = data.stats.uniqueKeywords || 0;
-    }
-    if (document.getElementById('statBlacklistedAds')) {
-      document.getElementById('statBlacklistedAds').textContent = data.stats.totalBlacklisted || 0;
-    }
-    if (document.getElementById('statWhitelistedAds')) {
-      document.getElementById('statWhitelistedAds').textContent = data.stats.totalWhitelisted || 0;
-    }
-
-    // Badge no nav
-    if (document.getElementById('navAdsCount')) {
-      document.getElementById('navAdsCount').textContent = data.stats.totalAds || 0;
-    }
-  } catch (_) {}
+function createEmptyState() {
+  const div = document.createElement('div');
+  div.className = 'profile-empty-state';
+  div.id = 'adsEmptyState';
+  div.innerHTML = `
+    <div class="empty-icon">📢</div>
+    <div class="empty-title">Nenhum anúncio na safelist encontrado</div>
+    <div class="empty-desc">Anúncios marcados como safelist aparecerão aqui em tempo real.</div>
+  `;
+  return div;
 }
 
-// ── Carregar Anúncios ───────────────────────────────────────────────────────
+// ── Carregar Anúncios da Safelist ───────────────────────────────────────────
 
-async function loadAds() {
-  const offset = adsState.page * adsState.perPage;
+async function loadSafelistAds() {
+  const offset = safelistState.page * safelistState.perPage;
   const params = new URLSearchParams({
-    limit: adsState.perPage,
+    limit: safelistState.perPage,
     offset,
+    is_whitelisted: 'true',
+    orderBy: safelistState.orderBy
   });
-  if (adsState.filterKeyword) params.set('keyword', adsState.filterKeyword);
-  if (adsState.filterDomain) params.set('domain', adsState.filterDomain);
+
+  if (safelistState.filterKeyword) params.set('keyword', safelistState.filterKeyword);
+  if (safelistState.filterDomain) params.set('domain', safelistState.filterDomain);
 
   try {
     const res = await fetch(`/api/ads/all?${params}`);
     const data = await res.json();
     if (!data.ok) return;
 
-    adsState.ads = data.ads || [];
-    adsState.total = data.total || 0;
+    safelistState.ads = data.ads || [];
+    safelistState.total = data.total || 0;
 
     renderAdsTable();
     updatePagination();
   } catch (err) {
-    console.error('[Anúncios] Erro ao carregar:', err);
+    console.error('[Safelist] Erro ao carregar anúncios:', err);
   }
 }
 
-// ── Render Tabela ───────────────────────────────────────────────────────────
+// ── Renderizar Tabela ───────────────────────────────────────────────────────
 
 function renderAdsTable() {
   const container = document.getElementById('adsTableContainer');
   const emptyState = document.getElementById('adsEmptyState');
 
-  if (adsState.ads.length === 0) {
+  if (safelistState.ads.length === 0) {
     container.innerHTML = '';
     container.appendChild(emptyState || createEmptyState());
     if (emptyState) emptyState.style.display = 'flex';
@@ -151,7 +135,7 @@ function renderAdsTable() {
       </tr>
     </thead>
     <tbody>
-      ${adsState.ads.map(ad => {
+      ${safelistState.ads.map(ad => {
         const reps = ad.repetitions || 1;
         const repClass = reps >= 5 ? 'rep-high' : reps >= 2 ? 'rep-mid' : 'rep-low';
         const kwList = (ad.keywords || ad.keyword || '').split(',').filter(Boolean);
@@ -163,7 +147,7 @@ function renderAdsTable() {
         const titles = [...new Set((ad.all_titles || ad.ad_title || '').split(' ||| ').map(t => t.trim()).filter(Boolean))];
 
         return `
-        <tr data-ad-ids="${ad.all_ids || ad.id}" class="${ad.is_blacklisted ? 'ad-row-blacklisted' : ''}${ad.is_whitelisted ? 'ad-row-whitelisted' : ''}">
+        <tr data-ad-ids="${ad.all_ids || ad.id}" class="ad-row-whitelisted">
           <td style="text-align:center;">
             <span class="ad-rep-badge ${repClass}">${reps}x</span>
           </td>
@@ -232,7 +216,7 @@ function renderAdsTable() {
   container.innerHTML = '';
   container.appendChild(table);
 
-  // Bind details buttons
+  // Bind dos botões de detalhes/info
   table.querySelectorAll('.ad-details-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -243,7 +227,7 @@ function renderAdsTable() {
     });
   });
 
-  // Bind copy buttons
+  // Bind dos botões de copiar links
   table.querySelectorAll('.ad-copy-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -270,8 +254,7 @@ function renderAdsTable() {
         });
         const data = await res.json();
         if (data.ok) {
-          loadAds();
-          loadAdsStats();
+          loadSafelistAds();
         } else {
           alert('Erro: ' + (data.error || 'Falha ao salvar'));
         }
@@ -295,8 +278,7 @@ function renderAdsTable() {
         });
         const data = await res.json();
         if (data.ok) {
-          loadAds();
-          loadAdsStats();
+          loadSafelistAds();
         } else {
           alert('Erro: ' + (data.error || 'Falha ao salvar'));
         }
@@ -306,31 +288,18 @@ function renderAdsTable() {
     });
   });
 
-  // Bind delete buttons — exclui todos os IDs do grupo
+  // Bind dos botões de exclusão
   table.querySelectorAll('.ad-delete-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       const ids = (btn.dataset.adIds || '').split(',').map(Number).filter(Boolean);
       const count = ids.length;
-      if (!confirm(`Excluir ${count} registro${count > 1 ? 's' : ''} deste anúncio?`)) return;
+      if (!confirm(`Excluir ${count} registro${count > 1 ? 's' : ''} deste anúncio na safelist?`)) return;
       try {
         await Promise.all(ids.map(id => fetch(`/api/ads/${id}`, { method: 'DELETE' })));
-        loadAds();
-        loadAdsStats();
+        loadSafelistAds();
       } catch (_) {}
     });
   });
-}
-
-function createEmptyState() {
-  const div = document.createElement('div');
-  div.className = 'profile-empty-state';
-  div.id = 'adsEmptyState';
-  div.innerHTML = `
-    <div class="empty-icon">📢</div>
-    <div class="empty-title">Nenhum anúncio encontrado</div>
-    <div class="empty-desc">Os anúncios aparecerão aqui após as pesquisas dos bots.</div>
-  `;
-  return div;
 }
 
 // ── Paginação ───────────────────────────────────────────────────────────────
@@ -341,259 +310,64 @@ function updatePagination() {
   const prevBtn = document.getElementById('btnAdsPrevPage');
   const nextBtn = document.getElementById('btnAdsNextPage');
 
-  if (adsState.total === 0) {
+  if (safelistState.total === 0) {
     pagination.style.display = 'none';
     return;
   }
 
   pagination.style.display = 'flex';
 
-  const start = adsState.page * adsState.perPage + 1;
-  const end = Math.min(start + adsState.perPage - 1, adsState.total);
-  const totalPages = Math.ceil(adsState.total / adsState.perPage);
+  const start = safelistState.page * safelistState.perPage + 1;
+  const end = Math.min(start + safelistState.perPage - 1, safelistState.total);
+  const totalPages = Math.ceil(safelistState.total / safelistState.perPage);
 
-  info.textContent = `${start}–${end} de ${adsState.total} anúncio(s) · Página ${adsState.page + 1}/${totalPages}`;
-  prevBtn.disabled = adsState.page <= 0;
-  nextBtn.disabled = end >= adsState.total;
+  info.textContent = `${start}–${end} de ${safelistState.total} anúncio(s) · Página ${safelistState.page + 1}/${totalPages}`;
+  prevBtn.disabled = safelistState.page <= 0;
+  nextBtn.disabled = end >= safelistState.total;
 }
 
-// ── Top Anunciantes ─────────────────────────────────────────────────────────
+// ── Modal de Títulos Históricos ──────────────────────────────────────────────
 
-async function loadTopAdvertisers() {
-  const container = document.getElementById('topAdvertisersContainer');
-  try {
-    const res = await fetch('/api/ads/top-advertisers?limit=15');
-    const data = await res.json();
-    if (!data.ok || !data.advertisers || data.advertisers.length === 0) {
-      container.innerHTML = '<div class="log-empty"><span>Nenhum anunciante encontrado.</span></div>';
-      return;
-    }
+function openAdTitlesModal(domain, titles) {
+  const overlay = document.getElementById('adTitlesModalOverlay');
+  const domainLabel = document.getElementById('adTitlesDomainLabel');
+  const container = document.getElementById('adTitlesListContainer');
+  if (!overlay || !domainLabel || !container) return;
 
-    adsState.topAdvertisers = data.advertisers;
-    const maxApp = data.advertisers[0]?.appearances || 1;
+  domainLabel.textContent = domain;
+  container.innerHTML = titles.map(title => `
+    <li class="ad-title-item" style="padding:8px 12px; background:var(--background-secondary); border-radius:6px; border:1px solid var(--border-color); font-size:13px; color:var(--text-primary); word-break:break-word;">
+      ✨ ${escapeHtmlAds(title)}
+    </li>
+  `).join('');
 
-    container.innerHTML = `
-      <div class="top-advertisers-list">
-        ${data.advertisers.map((adv, i) => {
-          const pct = Math.max(5, (adv.appearances / maxApp) * 100);
-          const flagged = adv.times_blacklisted > 0;
-          return `
-            <div class="top-adv-row ${flagged ? 'flagged' : ''}">
-              <div class="top-adv-rank">${i + 1}</div>
-              <div class="top-adv-info">
-                <div class="top-adv-domain" title="${escapeHtmlAds(adv.display_url)}">${escapeHtmlAds(truncate(adv.display_url, 50))}</div>
-                <div class="top-adv-bar-bg">
-                  <div class="top-adv-bar" style="width:${pct}%"></div>
-                </div>
-              </div>
-              <div class="top-adv-stats">
-                <span class="top-adv-count">${adv.appearances}x</span>
-                ${flagged ? `<span class="ad-flag blacklisted" title="${adv.times_blacklisted} blacklisted">🚨 ${adv.times_blacklisted}</span>` : ''}
-              </div>
-            </div>
-          `;
-        }).join('')}
-      </div>
-    `;
-  } catch (_) {
-    container.innerHTML = '<div class="log-empty"><span>Erro ao carregar.</span></div>';
-  }
+  overlay.classList.add('visible');
 }
 
-// ── Event Listeners ─────────────────────────────────────────────────────────
+function initAdTitlesModal() {
+  const overlay = document.getElementById('adTitlesModalOverlay');
+  const btnClose = document.getElementById('btnCloseAdTitles');
+  const btnCloseOk = document.getElementById('btnCloseAdTitlesOk');
 
-document.getElementById('btnRefreshAds')?.addEventListener('click', () => {
-  loadAds();
-  loadAdsStats();
-  loadTopAdvertisers();
-});
+  if (!overlay) return;
 
-document.getElementById('btnClearAllAds')?.addEventListener('click', async () => {
-  if (!confirm('⚠️ Tem certeza que deseja excluir TODOS os anúncios? Esta ação é irreversível.')) return;
-  try {
-    await fetch('/api/ads/clear-all', { method: 'DELETE' });
-    adsState.page = 0;
-    loadAds();
-    loadAdsStats();
-    loadTopAdvertisers();
-  } catch (_) {}
-});
-
-document.getElementById('btnApplyAdsFilter')?.addEventListener('click', () => {
-  adsState.filterKeyword = document.getElementById('adsFilterKeyword')?.value.trim() || '';
-  adsState.filterDomain = document.getElementById('adsFilterDomain')?.value.trim() || '';
-  adsState.page = 0;
-  loadAds();
-});
-
-// Enter nos filtros
-document.getElementById('adsFilterKeyword')?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') document.getElementById('btnApplyAdsFilter')?.click();
-});
-document.getElementById('adsFilterDomain')?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') document.getElementById('btnApplyAdsFilter')?.click();
-});
-
-document.getElementById('btnAdsPrevPage')?.addEventListener('click', () => {
-  if (adsState.page > 0) {
-    adsState.page--;
-    loadAds();
-  }
-});
-
-document.getElementById('btnAdsNextPage')?.addEventListener('click', () => {
-  const maxPage = Math.ceil(adsState.total / adsState.perPage) - 1;
-  if (adsState.page < maxPage) {
-    adsState.page++;
-    loadAds();
-  }
-});
-
-// ── Real-time via Socket ────────────────────────────────────────────────────
-
-document.addEventListener('ads:new-ad', () => {
-  // Atualiza se estiver na página de anúncios
-  const section = document.getElementById('sectionAnuncios');
-  if (section?.classList.contains('active')) {
-    loadAds();
-    loadAdsStats();
-    loadTopAdvertisers();
-  }
-});
-
-document.addEventListener('ads:updated', () => {
-  const section = document.getElementById('sectionAnuncios');
-  if (section?.classList.contains('active')) {
-    loadAds();
-    loadAdsStats();
-    loadTopAdvertisers();
-  }
-});
-
-// ── Inicialização ───────────────────────────────────────────────────────────
-
-// Carrega dados quando a seção fica visível (troca de menu)
-const adsObserver = new MutationObserver(() => {
-  const section = document.getElementById('sectionAnuncios');
-  if (section?.classList.contains('active')) {
-    loadAds();
-    loadAdsStats();
-    loadTopAdvertisers();
-  }
-});
-
-const anunciosSection = document.getElementById('sectionAnuncios');
-if (anunciosSection) {
-  adsObserver.observe(anunciosSection, { attributes: true, attributeFilter: ['class'] });
-
-  // Se a seção JÁ está ativa ao carregar (F5 em #anuncios), carrega imediatamente
-  if (anunciosSection.classList.contains('active')) {
-    loadAds();
-    loadAdsStats();
-    loadTopAdvertisers();
-  }
-}
-
-// Carrega stats na inicialização (para o badge do nav)
-loadAdsStats();
-
-// ══════════════════════════════════════════════════════════════════════════════
-// BLACKLIST MODAL
-// ══════════════════════════════════════════════════════════════════════════════
-
-(function initBlacklistModal() {
-  const overlay = document.getElementById('blacklistModalOverlay');
-  const textarea = document.getElementById('blacklistTextarea');
-  const wordCount = document.getElementById('blacklistWordCount');
-  const btnOpen = document.getElementById('btnOpenBlacklist');
-  const btnClose = document.getElementById('btnCloseBlacklist');
-  const btnCancel = document.getElementById('btnCancelBlacklist');
-  const btnSave = document.getElementById('btnSaveBlacklist');
-
-  if (!overlay || !textarea || !btnOpen) return;
-
-  function updateWordCount() {
-    const lines = textarea.value.split('\n').map(l => l.trim()).filter(Boolean);
-    wordCount.textContent = `${lines.length} regra${lines.length !== 1 ? 's' : ''}`;
-  }
-
-  async function loadBlacklistRules() {
-    try {
-      const res = await fetch('/api/ads/blacklist');
-      const data = await res.json();
-      if (data.ok && data.rules) {
-        textarea.value = data.rules.map(r => r.pattern).join('\n');
-      }
-    } catch (_) {}
-    updateWordCount();
-  }
-
-  // Abrir modal
-  btnOpen.addEventListener('click', () => {
-    overlay.classList.add('visible');
-    loadBlacklistRules();
-    setTimeout(() => textarea.focus(), 100);
-  });
-
-  // Fechar modal
   function closeModal() {
     overlay.classList.remove('visible');
   }
 
-  btnClose.addEventListener('click', closeModal);
-  btnCancel.addEventListener('click', closeModal);
+  btnClose?.addEventListener('click', closeModal);
+  btnCloseOk?.addEventListener('click', closeModal);
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) closeModal();
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && overlay.classList.contains('visible')) closeModal();
   });
+}
 
-  textarea.addEventListener('input', updateWordCount);
+// ── Modal de Configuração da Safelist (Whitelist) ───────────────────────────
 
-  btnSave.addEventListener('click', async () => {
-    const lines = textarea.value.split('\n').map(l => l.trim()).filter(Boolean);
-    btnSave.disabled = true;
-    btnSave.textContent = '⏳ Salvando...';
-
-    try {
-      const res = await fetch('/api/ads/blacklist/bulk-sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ patterns: lines }),
-      });
-      const data = await res.json();
-
-      if (data.ok) {
-        closeModal();
-        loadAds();
-        loadAdsStats();
-      } else {
-        alert('Erro: ' + (data.error || 'Falha ao salvar'));
-      }
-    } catch (err) {
-      alert('Erro de rede: ' + err.message);
-    } finally {
-      btnSave.disabled = false;
-      btnSave.textContent = '💾 Salvar';
-    }
-  });
-
-  if (typeof socket !== 'undefined') {
-    socket.on('ads:blacklist:updated', () => {
-      if (!overlay.classList.contains('visible')) {
-        loadAds();
-        loadAdsStats();
-      }
-    });
-  }
-})();
-
-// ══════════════════════════════════════════════════════════════════════════════
-// WHITELIST / SAFELIST MODAL
-// ══════════════════════════════════════════════════════════════════════════════
-
-(function initWhitelistModal() {
+function initWhitelistModal() {
   const overlay = document.getElementById('whitelistModalOverlay');
   const textarea = document.getElementById('whitelistTextarea');
   const wordCount = document.getElementById('whitelistWordCount');
@@ -658,8 +432,7 @@ loadAdsStats();
 
       if (data.ok) {
         closeModal();
-        loadAds();
-        loadAdsStats();
+        loadSafelistAds();
       } else {
         alert('Erro: ' + (data.error || 'Falha ao salvar'));
       }
@@ -674,53 +447,74 @@ loadAdsStats();
   if (typeof socket !== 'undefined') {
     socket.on('ads:whitelist:updated', () => {
       if (!overlay.classList.contains('visible')) {
-        loadAds();
-        loadAdsStats();
+        loadSafelistAds();
       }
     });
   }
-})();
-
-/**
- * Abre o modal de títulos do anúncio.
- * @param {string} domain
- * @param {Array<string>} titles
- */
-function openAdTitlesModal(domain, titles) {
-  const overlay = document.getElementById('adTitlesModalOverlay');
-  const domainLabel = document.getElementById('adTitlesDomainLabel');
-  const container = document.getElementById('adTitlesListContainer');
-  if (!overlay || !domainLabel || !container) return;
-
-  domainLabel.textContent = domain;
-  container.innerHTML = titles.map(title => `
-    <li class="ad-title-item" style="padding:8px 12px; background:var(--background-secondary); border-radius:6px; border:1px solid var(--border-color); font-size:13px; color:var(--text-primary); word-break:break-word;">
-      ✨ ${escapeHtmlAds(title)}
-    </li>
-  `).join('');
-
-  overlay.classList.add('visible');
 }
 
-// Inicializa o modal de títulos
-(function initAdTitlesModal() {
-  const overlay = document.getElementById('adTitlesModalOverlay');
-  const btnClose = document.getElementById('btnCloseAdTitles');
-  const btnCloseOk = document.getElementById('btnCloseAdTitlesOk');
+// ── Event Listeners ─────────────────────────────────────────────────────────
 
-  if (!overlay) return;
+function setupEventListeners() {
+  const filterKeywordInput = document.getElementById('filterKeyword');
+  const filterDomainInput = document.getElementById('filterDomain');
+  const orderBySelect = document.getElementById('orderBy');
+  const btnApply = document.getElementById('btnApplyFilters');
 
-  function closeModal() {
-    overlay.classList.remove('visible');
-  }
-
-  btnClose?.addEventListener('click', closeModal);
-  btnCloseOk?.addEventListener('click', closeModal);
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) closeModal();
+  // Clique no botão Filtrar
+  btnApply?.addEventListener('click', () => {
+    safelistState.filterKeyword = filterKeywordInput?.value.trim() || '';
+    safelistState.filterDomain = filterDomainInput?.value.trim() || '';
+    safelistState.orderBy = orderBySelect?.value || 'recent';
+    safelistState.page = 0;
+    loadSafelistAds();
   });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && overlay.classList.contains('visible')) closeModal();
-  });
-})();
 
+  // Enter nos inputs de pesquisa
+  [filterKeywordInput, filterDomainInput].forEach(input => {
+    input?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        btnApply?.click();
+      }
+    });
+  });
+
+  // Mudança rápida na ordenação
+  orderBySelect?.addEventListener('change', () => {
+    btnApply?.click();
+  });
+
+  // Botões de Paginação
+  document.getElementById('btnAdsPrevPage')?.addEventListener('click', () => {
+    if (safelistState.page > 0) {
+      safelistState.page--;
+      loadSafelistAds();
+    }
+  });
+
+  document.getElementById('btnAdsNextPage')?.addEventListener('click', () => {
+    const maxPage = Math.ceil(safelistState.total / safelistState.perPage) - 1;
+    if (safelistState.page < maxPage) {
+      safelistState.page++;
+      loadSafelistAds();
+    }
+  });
+
+  // Real-time via Socket
+  document.addEventListener('ads:new-ad', () => {
+    loadSafelistAds();
+  });
+
+  document.addEventListener('ads:updated', () => {
+    loadSafelistAds();
+  });
+}
+
+// ── Inicialização ───────────────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  initAdTitlesModal();
+  initWhitelistModal();
+  setupEventListeners();
+  loadSafelistAds();
+});
