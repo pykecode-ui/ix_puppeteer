@@ -720,6 +720,38 @@
     </div>
   </div>
 
+  <!-- ── Modal: Configurar Repetição (Loop) do Perfil ──────────────────── -->
+  <div id="loopConfigOverlay" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="loopConfigTitle">
+    <div class="modal-box" style="max-width:400px;">
+      <div class="modal-header">
+        <div class="modal-title" id="loopConfigTitle">⚙️ Configurar Repetição (Loop)</div>
+        <button class="modal-close" id="loopConfigClose" aria-label="Fechar">✕</button>
+      </div>
+      <div class="modal-body" style="padding:20px;">
+        <p style="font-size:13px; color:var(--text-secondary); margin-bottom:16px;">
+          Configure quantas vezes o perfil <strong id="loopConfigProfileLabel"></strong> irá se repetir (abrir, fazer pesquisa, fechar e reabrir).
+        </p>
+        
+        <div class="profile-form-group" style="margin-bottom:16px;">
+          <label class="form-label" for="loopConfigInfinite" style="display:flex; align-items:center; gap:8px; cursor:pointer; user-select:none;">
+            <input type="checkbox" id="loopConfigInfinite" style="accent-color:var(--accent); width:16px; height:16px; cursor:pointer;" />
+            <span>Loop Infinito (pesquisa contínua)</span>
+          </label>
+        </div>
+
+        <div class="profile-form-group" id="loopConfigCountGroup">
+          <label class="form-label" for="loopConfigCount">Número de Repetições *</label>
+          <input type="number" class="modal-input" id="loopConfigCount" min="1" value="1" placeholder="Ex: 5" style="width:100%; box-sizing:border-box;" />
+          <div class="form-hint" style="margin-top:6px;">O perfil será aberto e executará a pesquisa este número de vezes.</div>
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content:flex-end; gap:8px;">
+        <button class="btn btn-secondary" id="loopConfigCancel">Cancelar</button>
+        <button class="btn btn-primary" id="loopConfigSave">💾 Salvar Configurações</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Modal: Vincular Perfil a Bot ──────────────────────────────────── -->
   <div id="assignBotOverlay" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="assignBotTitle">
     <div class="modal-box" style="max-width:480px;">

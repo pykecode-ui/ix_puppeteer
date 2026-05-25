@@ -417,6 +417,7 @@ async function renderModalAssignments() {
           <th>Anotações</th>
           <th style="text-align:center;">Atribuído</th>
           <th style="text-align:center;">Aberturas</th>
+          <th style="text-align:center;">Config</th>
         </tr>
       </thead>
       <tbody>
@@ -442,6 +443,10 @@ async function renderModalAssignments() {
           const geoRegion = bpInfo.geo_region || '';
           const geoCity = bpInfo.geo_city || '';
           const geoRegionCity = [geoRegion, geoCity].filter(Boolean).join(' / ');
+
+          const loopCount = p.loop_count !== undefined ? p.loop_count : 1;
+          const isInfinite = !!p.infinite_loop;
+          const loopText = isInfinite ? '∞' : `${loopCount}x`;
 
           return `
           <tr class="${checked ? 'assign-row-active' : ''}">
@@ -473,6 +478,12 @@ async function renderModalAssignments() {
               </span>
             </td>
             <td style="text-align:center;">${openBadge}</td>
+            <td style="text-align:center;">
+              <div class="module-link-cell">
+                <span class="module-link-badge ${isInfinite || loopCount > 1 ? 'linked' : 'unlinked'}" style="${isInfinite ? 'background:var(--purple-soft); color:var(--purple); border-color:rgba(139, 92, 246, 0.3);' : ''}">${loopText}</span>
+                <button class="module-link-btn" onclick="openLoopConfigModal(${p.profile_id})" title="Configurar Repetição">⚙️</button>
+              </div>
+            </td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -807,6 +818,109 @@ async function unlinkModule(profileId) {
   }
 }
 
+// ── Modal de Configuração de Loop (Repetição) ─────────────────────────────────
+let _loopConfigTargetProfileId = null;
+
+function openLoopConfigModal(profileId) {
+  _loopConfigTargetProfileId = profileId;
+  const profile = profilesState.profiles.find((p) => p.profile_id === profileId);
+  if (!profile) return;
+
+  const overlay = document.getElementById('loopConfigOverlay');
+  const label = document.getElementById('loopConfigProfileLabel');
+  const infiniteCheckbox = document.getElementById('loopConfigInfinite');
+  const countInput = document.getElementById('loopConfigCount');
+  const countGroup = document.getElementById('loopConfigCountGroup');
+
+  if (!overlay) return;
+
+  label.textContent = `#${profileId} (${profile.name || 'Sem Nome'})`;
+  infiniteCheckbox.checked = !!profile.infinite_loop;
+  countInput.value = profile.loop_count !== undefined ? profile.loop_count : 1;
+
+  if (infiniteCheckbox.checked) {
+    countGroup.style.display = 'none';
+  } else {
+    countGroup.style.display = 'block';
+  }
+
+  overlay.style.display = 'flex';
+  setTimeout(() => overlay.classList.add('visible'), 10);
+}
+
+function closeLoopConfigModal() {
+  _loopConfigTargetProfileId = null;
+  const overlay = document.getElementById('loopConfigOverlay');
+  if (overlay) {
+    overlay.classList.remove('visible');
+    setTimeout(() => {
+      overlay.style.display = 'none';
+    }, 300);
+  }
+}
+
+// Setup Event Listeners para o Modal de Configuração de Loop
+document.addEventListener('DOMContentLoaded', () => {
+  const overlay = document.getElementById('loopConfigOverlay');
+  const infiniteCheckbox = document.getElementById('loopConfigInfinite');
+  const countGroup = document.getElementById('loopConfigCountGroup');
+
+  document.getElementById('loopConfigClose')?.addEventListener('click', closeLoopConfigModal);
+  document.getElementById('loopConfigCancel')?.addEventListener('click', closeLoopConfigModal);
+  overlay?.addEventListener('click', (e) => {
+    if (e.target === overlay) closeLoopConfigModal();
+  });
+
+  infiniteCheckbox?.addEventListener('change', () => {
+    if (infiniteCheckbox.checked) {
+      countGroup.style.display = 'none';
+    } else {
+      countGroup.style.display = 'block';
+    }
+  });
+
+  document.getElementById('loopConfigSave')?.addEventListener('click', async () => {
+    const profileId = _loopConfigTargetProfileId;
+    if (!profileId) return;
+
+    const isInfinite = infiniteCheckbox.checked;
+    const loopCount = isInfinite ? 1 : parseInt(document.getElementById('loopConfigCount').value);
+
+    if (!isInfinite && (isNaN(loopCount) || loopCount < 1)) {
+      alert('Por favor, insira um número válido de repetições (mínimo 1).');
+      return;
+    }
+
+    const btn = document.getElementById('loopConfigSave');
+    btn.disabled = true;
+    btn.textContent = 'Salvando...';
+
+    try {
+      const res = await fetch(`/api/profiles/${profileId}/loop-config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          loop_count: loopCount,
+          infinite_loop: isInfinite ? 1 : 0
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error);
+
+      if (typeof showToast === 'function') {
+        showToast('online', `⚙️ Configuração de loop salva para o perfil #${profileId}!`, null);
+      }
+      closeLoopConfigModal();
+      await loadProfiles();
+    } catch (err) {
+      alert(`Erro ao salvar configurações de repetição: ${err.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '💾 Salvar Configurações';
+    }
+  });
+});
+
 // Expõe funções globais usadas no onclick inline da tabela
 window.editProfilePrompt = editProfilePrompt;
 window.deleteProfile = deleteProfile;
@@ -815,3 +929,5 @@ window.openModuleSelector = openModuleSelector;
 window.closeModuleSelector = closeModuleSelector;
 window.selectModuleForProfile = selectModuleForProfile;
 window.unlinkModule = unlinkModule;
+window.openLoopConfigModal = openLoopConfigModal;
+window.closeLoopConfigModal = closeLoopConfigModal;

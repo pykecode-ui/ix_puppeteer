@@ -15,6 +15,11 @@ let BOT_ID = null;
 // ── Cache de geolocalização por perfil ──────────────────────────────────────
 const profileGeoCache = {};
 
+// ── Loops de perfis ativos ──────────────────────────────────────────────────
+if (!global._profileLoops) {
+  global._profileLoops = new Map();
+}
+
 /**
  * Inicializa o dispatcher com o ID deste bot.
  * @param {string} botId
@@ -30,6 +35,200 @@ function init(botId) {
  */
 function log(level, message) {
   client.sendLog(BOT_ID, level, message);
+}
+
+/**
+ * Lógica assíncrona que gerencia o ciclo de repetição de um perfil.
+ * @param {number} profileId
+ * @param {import('axios').AxiosInstance} http
+ */
+async function runProfileLoop(profileId, http) {
+  let cancelled = false;
+  let activeTimeout = null;
+  let sleepResolve = null;
+
+  const sleep = (ms) => new Promise(resolve => {
+    sleepResolve = resolve;
+    activeTimeout = setTimeout(() => {
+      activeTimeout = null;
+      sleepResolve = null;
+      resolve();
+    }, ms);
+  });
+
+  const loopState = {
+    cancel: () => {
+      cancelled = true;
+      log('warn', `🛑 Cancelando loop de repetição do perfil #${profileId}.`);
+      if (activeTimeout) {
+        clearTimeout(activeTimeout);
+        activeTimeout = null;
+      }
+      if (sleepResolve) {
+        sleepResolve();
+        sleepResolve = null;
+      }
+      if (global._searchWorkers && global._searchWorkers.has(profileId)) {
+        const worker = global._searchWorkers.get(profileId);
+        if (worker && typeof worker.cancel === 'function') {
+          worker.cancel();
+        }
+      }
+    }
+  };
+
+  if (!global._profileLoops) {
+    global._profileLoops = new Map();
+  }
+  global._profileLoops.set(profileId, loopState);
+
+  try {
+    const profRes = await http.get(`/api/profiles/${profileId}`);
+    if (!profRes.data?.ok || !profRes.data.profile) {
+      throw new Error(`Perfil #${profileId} não encontrado no banco.`);
+    }
+    const profile = profRes.data.profile;
+    const loopCount = profile.loop_count !== undefined ? profile.loop_count : 1;
+    const isInfinite = !!profile.infinite_loop;
+
+    log('info', `🔁 Perfil #${profileId}: Configurado com loop_count=${loopCount}, infinite=${isInfinite}`);
+
+    let iteration = 0;
+    while (!cancelled) {
+      iteration++;
+
+      if (!isInfinite && iteration > loopCount) {
+        log('info', `🏁 Perfil #${profileId}: Atingiu o limite de ${loopCount} repetição(ões).`);
+        break;
+      }
+
+      log('info', `🔄 [Ciclo ${iteration}] Perfil #${profileId}: Iniciando ciclo...`);
+
+      // A. Abre o perfil
+      if (cancelled) break;
+      let openRes;
+      try {
+        openRes = await COMMANDS.open_profile({ profileId });
+      } catch (err) {
+        log('error', `❌ [Ciclo ${iteration}] Perfil #${profileId}: Falha ao abrir perfil: ${err.message}`);
+        if (cancelled) break;
+        await sleep(10000);
+        continue;
+      }
+
+      if (cancelled) {
+        try {
+          await puppeteerBot.disconnectProfile(profileId);
+          await ixbrowser.closeProfile(profileId);
+          client.sendStatus(BOT_ID, { profileId, status: 'closed' });
+        } catch (_) {}
+        break;
+      }
+
+      // B. Busca módulo vinculado e faz pesquisa
+      if (cancelled) break;
+      try {
+        const linksRes = await http.get('/api/profile-module-links');
+        if (cancelled) break;
+        const links = linksRes.data?.links || [];
+        const link = links.find(l => l.profile_id === profileId);
+
+        if (link && link.module_id) {
+          log('info', `📋 [Ciclo ${iteration}] Perfil #${profileId}: Pesquisando módulo "${link.label}" (ID: ${link.module_id}).`);
+
+          const config = require('../../config');
+          const { SearchWorker } = require('../bot/search-worker');
+
+          const worker = new SearchWorker(profileId, link.module_id, BOT_ID, {
+            log: (msg) => log('info', msg),
+            rounds: 1,
+            searchMethod: 'direct_url',
+            twoCaptchaKey: config.TWOCAPTCHA_API_KEY || '',
+            geo: profileGeoCache[profileId] || null,
+          });
+
+          if (!global._searchWorkers) global._searchWorkers = new Map();
+          global._searchWorkers.set(profileId, worker);
+
+          client.sendStatus(BOT_ID, {
+            profileId,
+            status: 'open',
+            moduleId: link.module_id,
+          });
+
+          const summary = await worker.run();
+
+          global._searchWorkers.delete(profileId);
+
+          if (cancelled) break;
+
+          client.sendStatus(BOT_ID, {
+            profileId,
+            status: 'open',
+            searchSummary: {
+              keywordsDone: summary.keywordsDone,
+              totalAdsFound: summary.totalAdsFound,
+              errors: summary.errors,
+              status: summary.status,
+            },
+          });
+
+          log('success', `✅ [Ciclo ${iteration}] Perfil #${profileId}: Pesquisa concluída (${summary.keywordsDone} palavras, ${summary.totalAdsFound} anúncios).`);
+        } else {
+          log('info', `ℹ️ [Ciclo ${iteration}] Perfil #${profileId} não tem módulo de pesquisa vinculado. Pulando pesquisa.`);
+          if (cancelled) break;
+          await sleep(5000);
+        }
+      } catch (err) {
+        log('error', `❌ [Ciclo ${iteration}] Perfil #${profileId}: Erro na pesquisa: ${err.message}`);
+      }
+
+      if (cancelled) {
+        try {
+          await puppeteerBot.disconnectProfile(profileId);
+          await ixbrowser.closeProfile(profileId);
+          client.sendStatus(BOT_ID, { profileId, status: 'closed' });
+        } catch (_) {}
+        break;
+      }
+
+      // C. Fecha o perfil (fecha diretamente para não cancelar o próprio loop)
+      try {
+        log('info', `⏳ [Ciclo ${iteration}] Perfil #${profileId}: Aguardando 5 segundos antes de fechar o perfil...`);
+        await sleep(5000);
+
+        if (cancelled) {
+          try {
+            await puppeteerBot.disconnectProfile(profileId);
+            await ixbrowser.closeProfile(profileId);
+            client.sendStatus(BOT_ID, { profileId, status: 'closed' });
+          } catch (_) {}
+          break;
+        }
+
+        log('info', `🔒 [Ciclo ${iteration}] Perfil #${profileId}: Finalizando ciclo. Fechando perfil...`);
+        await puppeteerBot.disconnectProfile(profileId);
+        await ixbrowser.closeProfile(profileId);
+        client.sendStatus(BOT_ID, { profileId, status: 'closed' });
+        log('success', `✅ [Ciclo ${iteration}] Perfil #${profileId}: Fechado com sucesso.`);
+      } catch (err) {
+        log('error', `❌ [Ciclo ${iteration}] Perfil #${profileId}: Erro ao fechar perfil: ${err.message}`);
+      }
+
+      if (cancelled) break;
+
+      log('info', `⏳ Perfil #${profileId}: Aguardando 5 segundos para iniciar o próximo ciclo...`);
+      await sleep(5000);
+    }
+  } catch (err) {
+    log('error', `❌ Erro no loop de repetição do perfil #${profileId}: ${err.message}`);
+  } finally {
+    // Só deleta do Map se o loop que está no Map for este loopState atual!
+    if (global._profileLoops && global._profileLoops.get(profileId) === loopState) {
+      global._profileLoops.delete(profileId);
+    }
+    log('info', `⏹ Perfil #${profileId}: Loop finalizado.`);
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -112,6 +311,16 @@ const COMMANDS = {
   async close_profile({ profileId }) {
     if (!profileId) throw new Error('profileId é obrigatório para close_profile.');
 
+    // Cancela o loop de repetição se houver
+    if (global._profileLoops && global._profileLoops.has(profileId)) {
+      log('info', `[Loop] Cancelando loop ativo do perfil #${profileId} via fechamento manual...`);
+      const loop = global._profileLoops.get(profileId);
+      if (loop && typeof loop.cancel === 'function') {
+        loop.cancel();
+      }
+      global._profileLoops.delete(profileId);
+    }
+
     log('info', `🔒 Fechando perfil #${profileId}...`);
 
     // Notifica dashboard: fechando
@@ -132,36 +341,42 @@ const COMMANDS = {
   },
 
   /**
-   * Retorna a lista de perfis ativos no bot.
-   * payload: {} (sem parâmetros)
-   */
-  async list_profiles() {
-    const profiles = puppeteerBot.getActiveProfiles();
-    log('info', `Perfis ativos: ${profiles.length}`);
-    profiles.forEach((p) => {
-      log('info', `  → Perfil #${p.profileId} | URL: ${p.url} | Conectado: ${p.connected}`);
-    });
-    return { ok: true, profiles };
-  },
-
-  /**
    * Fecha todos os perfis abertos pelo bot.
    * payload: {}
    */
   async close_all_profiles() {
-    log('warn', '⚠️ Fechando todos os perfis ativos...');
-    const profiles = puppeteerBot.getActiveProfiles();
+    log('warn', '⚠️ Buscando todos os perfis abertos no ixBrowser para fechar...');
+    let opened = [];
+    try {
+      opened = await ixbrowser.listOpenedProfiles();
+    } catch (err) {
+      log('error', `Erro ao listar perfis abertos no ixBrowser: ${err.message}`);
+      // Fallback para os perfis rastreados pelo Puppeteer
+      opened = puppeteerBot.getActiveProfiles().map(p => ({ profile_id: p.profileId }));
+    }
 
-    for (const { profileId } of profiles) {
+    if (!Array.isArray(opened)) opened = [];
+
+    log('info', `Encontrados ${opened.length} perfis abertos no ixBrowser. Fechando todos...`);
+
+    let closedCount = 0;
+    for (const item of opened) {
+      const profileId = item.profile_id;
       try {
         await COMMANDS.close_profile({ profileId });
+        closedCount++;
       } catch (err) {
         log('error', `Erro ao fechar perfil #${profileId}: ${err.message}`);
       }
     }
 
-    log('success', `✅ ${profiles.length} perfil(is) fechado(s).`);
-    return { ok: true, count: profiles.length };
+    // Garante que todas as sessões locais do Puppeteer também sejam encerradas
+    try {
+      await puppeteerBot.disconnectAll();
+    } catch (_) {}
+
+    log('success', `✅ ${closedCount} perfil(is) fechado(s).`);
+    return { ok: true, count: closedCount };
   },
 
   /**
@@ -184,8 +399,7 @@ const COMMANDS = {
   },
 
   /**
-   * Inicia o bot: abre todos os perfis e inicia pesquisa automática.
-   * Para cada perfil, busca o módulo de pesquisa vinculado e inicia o SearchWorker.
+   * Inicia o bot: abre todos os perfis e inicia o loop de pesquisa automática.
    * payload: { profileIds: number[] }
    */
   async start_bot({ profileIds = [] }) {
@@ -203,62 +417,57 @@ const COMMANDS = {
       timeout: config.API_TIMEOUT_MS,
     });
 
-    const results = [];
     for (let i = 0; i < profileIds.length; i++) {
       const profileId = profileIds[i];
       try {
+        // Se já houver um loop rodando para esse perfil, cancela
+        if (global._profileLoops && global._profileLoops.has(profileId)) {
+          log('info', `Re-iniciando loop para o perfil #${profileId}...`);
+          const loop = global._profileLoops.get(profileId);
+          if (loop && typeof loop.cancel === 'function') {
+            loop.cancel();
+          }
+          global._profileLoops.delete(profileId);
+        }
+
         if (i > 0) {
-          log('info', `Aguardando 2 segundos antes de abrir o próximo perfil...`);
+          log('info', `Aguardando 2 segundos antes de iniciar o próximo perfil...`);
           await new Promise(r => setTimeout(r, 2000));
         }
-        const r = await COMMANDS.open_profile({ profileId });
-        results.push({ profileId, ok: true, ...r });
 
-        // ── Busca módulo vinculado e inicia pesquisa automática ──────────
-        try {
-          const linksRes = await http.get('/api/profile-module-links');
-          const links = linksRes.data?.links || [];
-          const link = links.find(l => l.profile_id === profileId);
-
-          if (link && link.module_id) {
-            log('info', `📋 Perfil #${profileId} tem módulo "${link.label}" (ID: ${link.module_id}) vinculado.`);
-            log('info', `🔍 Iniciando pesquisa automática…`);
-
-            // Inicia pesquisa (em background — não bloqueia outros perfis)
-            await COMMANDS.start_search({
-              profileId,
-              moduleId: link.module_id,
-              rounds: 1,
-              searchMethod: 'direct_url',
-              twoCaptchaKey: config.TWOCAPTCHA_API_KEY || '',
-            });
-          } else {
-            log('info', `ℹ️ Perfil #${profileId} não tem módulo de pesquisa vinculado. Pulando pesquisa.`);
-          }
-        } catch (searchErr) {
-          log('error', `❌ Erro ao iniciar pesquisa para perfil #${profileId}: ${searchErr.message}`);
-        }
+        // Inicia o loop em background (sem await)
+        runProfileLoop(profileId, http).catch(err => {
+          log('error', `❌ Erro fatal no loop do perfil #${profileId}: ${err.message}`);
+        });
 
       } catch (err) {
-        log('error', `❌ Falha ao abrir perfil #${profileId}: ${err.message}`);
-        results.push({ profileId, ok: false, error: err.message });
+        log('error', `❌ Falha ao iniciar perfil #${profileId}: ${err.message}`);
       }
     }
 
-    const ok = results.filter((r) => r.ok).length;
-    log('success', `✅ start_bot concluído: ${ok}/${profileIds.length} perfis abertos.`);
-    return { ok: true, results };
+    log('success', `✅ start_bot: Todos os loops de repetição iniciados em background.`);
+    return { ok: true };
   },
 
 
   /**
-   * Pausa o bot: fecha todos os perfis abertos.
+   * Pausa o bot: cancela todos os loops e fecha todos os perfis abertos.
    * payload: {}
    */
   async pause_bot() {
-    log('warn', '⏸ Pausando bot — fechando todos os perfis abertos...');
+    log('warn', '⏸ Pausando bot — cancelando todos os loops e fechando perfis...');
+    if (global._profileLoops) {
+      for (const [profileId, loop] of global._profileLoops.entries()) {
+        log('info', `Cancelando loop do perfil #${profileId}...`);
+        if (loop && typeof loop.cancel === 'function') {
+          loop.cancel();
+        }
+      }
+      global._profileLoops.clear();
+    }
     await COMMANDS.close_all_profiles();
     log('success', '⏹ Bot pausado com sucesso.');
+    client.sendRunState(BOT_ID, 'idle');
     return { ok: true };
   },
 

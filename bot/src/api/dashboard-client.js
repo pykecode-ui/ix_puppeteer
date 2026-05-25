@@ -155,6 +155,17 @@ function sendStatus(botId, statusData) {
 }
 
 /**
+ * Envia atualização do runState do bot via socket.
+ * @param {string} botId
+ * @param {'running'|'idle'} runState
+ */
+function sendRunState(botId, runState) {
+  if (socket && socket.connected) {
+    socket.emit('bot:run_state', { botId, runState });
+  }
+}
+
+/**
  * Notifica o dashboard que um perfil foi aberto, incrementando o open_count.
  * Fire-and-forget: não bloqueia o fluxo do bot se falhar.
  * @param {number|string} profileId
@@ -272,6 +283,7 @@ module.exports = {
   connectSocket,
   sendLog,
   sendStatus,
+  sendRunState,
   notifyProfileOpen,
   sendOffline,
   startHeartbeat,

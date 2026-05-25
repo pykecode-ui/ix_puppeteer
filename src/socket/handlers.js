@@ -101,6 +101,13 @@ function registerHandlers(socket, io) {
     });
   });
 
+  // Bot envia atualização de estado de execução (running/idle) em tempo real
+  socket.on('bot:run_state', ({ botId, runState }) => {
+    if (!botId || !runState) return;
+    models.updateBotRunState(botId, runState);
+    io.emit('bots:updated', { bots: models.getAllBots() });
+  });
+
   // ══════════════════════════════════════════════════════════════════════════
   // EVENTOS DO DASHBOARD (enviados pelo frontend ao servidor)
   // ══════════════════════════════════════════════════════════════════════════
@@ -129,6 +136,15 @@ function registerHandlers(socket, io) {
     if (!bot || bot.status === 'offline') {
       emitLog(socket, 'error', `Bot ${botId} está offline. Comando não enviado.`);
       return;
+    }
+
+    // Atualiza estado de execução do bot com base no comando enviado
+    if (command === 'start_bot') {
+      models.updateBotRunState(botId, 'running');
+      io.emit('bots:updated', { bots: models.getAllBots() });
+    } else if (command === 'pause_bot') {
+      models.updateBotRunState(botId, 'pausing');
+      io.emit('bots:updated', { bots: models.getAllBots() });
     }
 
     console.log(`[Dashboard] Enviando comando "${command}" para bot ${botId}`);

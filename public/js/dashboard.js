@@ -157,6 +157,12 @@ document.addEventListener('bots:list', (e) => {
     }
     window._pendingBotModal = null;
   }
+
+  // Atualiza estado do controle do bot se a página estiver aberta
+  if (state.activeBotModal && state.bots[state.activeBotModal]) {
+    const activeBot = state.bots[state.activeBotModal];
+    setBotRunUI(activeBot.run_state || 'idle');
+  }
 });
 
 document.addEventListener('bots:updated', (e) => {
@@ -166,6 +172,12 @@ document.addEventListener('bots:updated', (e) => {
   renderBotGrid();
   updateStats();
   updateLogFilter();
+
+  // Atualiza estado do controle do bot se a página estiver aberta
+  if (state.activeBotModal && state.bots[state.activeBotModal]) {
+    const activeBot = state.bots[state.activeBotModal];
+    setBotRunUI(activeBot.run_state || 'idle');
+  }
 });
 
 document.addEventListener('bot:online', (e) => {
@@ -525,6 +537,9 @@ function openBotModal(botId) {
   // Sobrescreve título com nome do bot
   document.getElementById('headerTitle').textContent    = `Controle: ${bot.name || 'Bot'}`;
   document.getElementById('headerSubtitle').textContent = `ID: ${botId}`;
+
+  // Define o estado visual do start/pause com base no estado do banco
+  setBotRunUI(bot.run_state || 'idle');
 
   // Carrega lista de perfis atribuídos (em profiles.js)
   if (typeof window.profiles_onModalOpen === 'function') {

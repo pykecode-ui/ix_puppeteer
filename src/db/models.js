@@ -116,13 +116,23 @@ function registerBot(botId, name, ip) {
  */
 function updateBotStatus(botId, status, socketId = null) {
   const now = nowBrasilia();
-  getDB()
-    .prepare(`
-      UPDATE bots
-      SET status = ?, socket_id = ?, last_seen = ?, updated_at = ?
-      WHERE bot_id = ?
-    `)
-    .run(status, socketId, now, now, botId);
+  if (status === 'offline') {
+    getDB()
+      .prepare(`
+        UPDATE bots
+        SET status = ?, socket_id = ?, run_state = 'idle', last_seen = ?, updated_at = ?
+        WHERE bot_id = ?
+      `)
+      .run(status, socketId, now, now, botId);
+  } else {
+    getDB()
+      .prepare(`
+        UPDATE bots
+        SET status = ?, socket_id = ?, last_seen = ?, updated_at = ?
+        WHERE bot_id = ?
+      `)
+      .run(status, socketId, now, now, botId);
+  }
 }
 
 /**
@@ -153,8 +163,20 @@ function getBotById(botId) {
 function markAllBotsOffline() {
   const now = nowBrasilia();
   getDB()
-    .prepare(`UPDATE bots SET status = 'offline', socket_id = NULL, updated_at = ? WHERE status = 'online'`)
+    .prepare(`UPDATE bots SET status = 'offline', socket_id = NULL, run_state = 'idle', updated_at = ? WHERE status = 'online'`)
     .run(now);
+}
+
+/**
+ * Atualiza o estado de execução (running/idle) do bot.
+ * @param {string} botId
+ * @param {'running'|'idle'} runState
+ */
+function updateBotRunState(botId, runState) {
+  const now = nowBrasilia();
+  getDB()
+    .prepare('UPDATE bots SET run_state = ?, updated_at = ? WHERE bot_id = ?')
+    .run(runState, now, botId);
 }
 
 /**
@@ -435,6 +457,19 @@ function updateIxProfile(profileId, name, notes) {
 }
 
 /**
+ * Atualiza as configurações de repetição (loop) de um perfil global.
+ * @param {number} profileId
+ * @param {number} loopCount
+ * @param {number} infiniteLoop
+ */
+function updateIxProfileLoopConfig(profileId, loopCount, infiniteLoop) {
+  const now = nowBrasilia();
+  getDB()
+    .prepare('UPDATE ix_profiles SET loop_count = ?, infinite_loop = ?, updated_at = ? WHERE profile_id = ?')
+    .run(loopCount, infiniteLoop, now, profileId);
+}
+
+/**
  * Remove um perfil global do cadastro (e suas atribuições em cascade).
  * @param {number} profileId
  */
@@ -691,6 +726,7 @@ module.exports = {
   // Bots (multi-bot)
   registerBot,
   updateBotStatus,
+  updateBotRunState,
   getAllBots,
   getBotById,
   botHeartbeat,
@@ -716,6 +752,7 @@ module.exports = {
   updateIxProfile,
   deleteIxProfile,
   incrementIxProfileOpenCount,
+  updateIxProfileLoopConfig,
   // Bot profile assignments
   getBotProfileAssignments,
   setBotProfileAssignments,
