@@ -43,6 +43,12 @@
         <span class="nav-badge" id="navModuleCount">0</span>
       </a>
 
+      <a class="nav-item" id="navAnuncios" href="#" role="menuitem" data-section="anuncios">
+        <span class="nav-icon" aria-hidden="true">📢</span>
+        <span>Anúncios</span>
+        <span class="nav-badge" id="navAdsCount">0</span>
+      </a>
+
       <a class="nav-item" id="navLogs" href="#" role="menuitem" data-section="logs">
         <span class="nav-icon" aria-hidden="true">📋</span>
         <span>Logs</span>
@@ -386,6 +392,114 @@
       </section>
 
       <!-- ══════════════════════════════════════════════════════════════════ -->
+      <!-- SEÇÃO: ANÚNCIOS                                                   -->
+      <!-- ══════════════════════════════════════════════════════════════════ -->
+      <section id="sectionAnuncios" class="section-page">
+
+        <!-- Stats Row -->
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-icon purple" aria-hidden="true">📢</div>
+            <div class="stat-info">
+              <div class="stat-value" id="statTotalAds">0</div>
+              <div class="stat-label">Total Anúncios</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green" aria-hidden="true">🔗</div>
+            <div class="stat-info">
+              <div class="stat-value" id="statUniqueDomains">0</div>
+              <div class="stat-label">Domínios</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon yellow" aria-hidden="true">🔎</div>
+            <div class="stat-info">
+              <div class="stat-value" id="statUniqueKeywords">0</div>
+              <div class="stat-label">Keywords</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon red" aria-hidden="true">🚨</div>
+            <div class="stat-info">
+              <div class="stat-value" id="statBlacklistedAds">0</div>
+              <div class="stat-label">Blacklisted</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filtros + Ações -->
+        <article class="card" aria-label="Filtros de anúncios">
+          <div class="card-header">
+            <div class="card-title-group">
+              <div class="card-icon" style="background: var(--purple-soft);" aria-hidden="true">🔍</div>
+              <div>
+                <div class="card-title">Anúncios Encontrados</div>
+                <div class="card-subtitle">Resultados coletados nas pesquisas dos bots</div>
+              </div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <button class="toolbar-btn" id="btnRefreshAds" aria-label="Atualizar">🔄 Atualizar</button>
+              <button class="toolbar-btn" id="btnClearAllAds" aria-label="Limpar tudo" style="color:var(--red);">🗑 Limpar Tudo</button>
+            </div>
+          </div>
+          <div class="card-body" style="padding:12px 22px;">
+            <!-- Barra de filtros -->
+            <div class="profile-form-row" style="gap:12px; margin-bottom:12px;">
+              <div class="profile-form-group" style="flex:1">
+                <label class="form-label" for="adsFilterKeyword">Filtrar por Keyword</label>
+                <input type="text" class="modal-input" id="adsFilterKeyword" placeholder="Ex: fusca, hilux..." />
+              </div>
+              <div class="profile-form-group" style="flex:1">
+                <label class="form-label" for="adsFilterDomain">Filtrar por Domínio</label>
+                <input type="text" class="modal-input" id="adsFilterDomain" placeholder="Ex: mercadolivre.com..." />
+              </div>
+              <div class="profile-form-group" style="flex:0 0 auto; display:flex; align-items:flex-end;">
+                <button class="btn btn-primary" id="btnApplyAdsFilter">🔍 Filtrar</button>
+              </div>
+            </div>
+
+            <!-- Tabela de Anúncios -->
+            <div id="adsTableContainer" style="overflow-x:auto;">
+              <div class="profile-empty-state" id="adsEmptyState">
+                <div class="empty-icon">📢</div>
+                <div class="empty-title">Nenhum anúncio encontrado</div>
+                <div class="empty-desc">Os anúncios aparecerão aqui após as pesquisas dos bots.</div>
+              </div>
+            </div>
+
+            <!-- Paginação -->
+            <div id="adsPagination" style="display:none; margin-top:16px; display:flex; justify-content:space-between; align-items:center;">
+              <span id="adsPaginationInfo" style="font-size:13px; color:var(--text-secondary);"></span>
+              <div style="display:flex; gap:8px;">
+                <button class="btn btn-secondary" id="btnAdsPrevPage" disabled>← Anterior</button>
+                <button class="btn btn-secondary" id="btnAdsNextPage">Próxima →</button>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- Top Anunciantes -->
+        <article class="card" style="margin-top:16px;" aria-label="Top anunciantes">
+          <div class="card-header">
+            <div class="card-title-group">
+              <div class="card-icon" style="background: var(--green-soft);" aria-hidden="true">🏆</div>
+              <div>
+                <div class="card-title">Top Anunciantes</div>
+                <div class="card-subtitle">Domínios que mais aparecem nos resultados</div>
+              </div>
+            </div>
+          </div>
+          <div class="card-body" style="padding:16px 22px;">
+            <div id="topAdvertisersContainer">
+              <div class="log-empty"><span>Carregando...</span></div>
+            </div>
+          </div>
+        </article>
+
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════════ -->
       <!-- SEÇÃO: LOGS                                                        -->
       <!-- ══════════════════════════════════════════════════════════════════ -->
       <section id="sectionLogs" class="section-page">
@@ -637,6 +751,7 @@
   <script src="/js/profiles.js"></script>
   <!-- Módulos de pesquisa (palavras-chave) -->
   <script src="/js/palavras.js"></script>
+  <!-- Módulo de anúncios -->
+  <script src="/js/anuncios.js"></script>
 </body>
 </html>
-

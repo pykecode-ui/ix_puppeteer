@@ -11,11 +11,13 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 
-// ─── Inicializa o banco ANTES de qualquer outro módulo que dependa dele ───────
+// ─── Inicializa os bancos ANTES de qualquer outro módulo que dependa deles ────
 const { initDatabase } = require('./src/db/database');
+const { initAdsDB } = require('./src/db/ads-database');
 const models = require('./src/db/models');
 
 initDatabase();
+initAdsDB();
 
 // Reseta todos os bots para "offline" ao iniciar o servidor.
 // Evita bots "fantasma" que ficaram com status online de sessões anteriores
@@ -27,6 +29,7 @@ const { registerHandlers } = require('./src/socket/handlers');
 const { createBotRouter } = require('./src/api/bot-router');
 const { createProfilesRouter } = require('./src/api/profiles-router');
 const { createPalavrasRouter } = require('./src/api/palavras-router');
+const { createAdsRouter } = require('./src/api/ads-router');
 
 
 const app = express();
@@ -53,6 +56,9 @@ app.use('/api', createProfilesRouter(io));
 
 // ─── API REST para módulos de pesquisa (palavras-chave) ──────────────────────
 app.use('/api', createPalavrasRouter(io));
+
+// ─── API REST para módulo de Ads (anúncios, whitelist, blacklist) ────────────
+app.use('/api', createAdsRouter(io));
 
 
 // Rota principal — retorna o dashboard

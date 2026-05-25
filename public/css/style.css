@@ -1943,3 +1943,232 @@ body {
   color: var(--text-muted);
   line-height: 1.6;
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   ANÚNCIOS — Estilos da página #anuncios
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Tabela de Anúncios */
+.ads-table {
+  font-size: 13px;
+}
+
+.ads-table thead th {
+  white-space: nowrap;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ads-table tbody td {
+  vertical-align: top;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+/* Badge de posição */
+.ad-pos-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ad-pos-badge.pos-top {
+  background: rgba(56, 189, 126, 0.15);
+  color: #38bd7e;
+}
+
+.ad-pos-badge.pos-bottom {
+  background: rgba(99, 133, 255, 0.15);
+  color: #6385ff;
+}
+
+.ad-pos-badge.pos-unknown {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+}
+
+/* Keyword chip */
+.ad-keyword-chip {
+  display: inline-block;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.18) 0%, rgba(99, 133, 255, 0.12) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--purple);
+  white-space: nowrap;
+}
+
+/* Título e descrição do anúncio */
+.ad-title-cell {
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.ad-desc-cell {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 3px;
+  line-height: 1.3;
+}
+
+/* URL de exibição */
+.ad-display-url {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--green);
+  word-break: break-all;
+}
+
+/* Link real */
+.ad-link {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  text-decoration: none;
+  word-break: break-all;
+  transition: color 0.2s;
+}
+
+.ad-link:hover {
+  color: var(--purple);
+  text-decoration: underline;
+}
+
+/* Flags */
+.ad-flag {
+  display: inline-block;
+  font-size: 14px;
+  cursor: default;
+}
+
+.ad-flag.blacklisted {
+  filter: none;
+}
+
+.ad-flag.whitelisted {
+  opacity: 0.6;
+}
+
+/* Rows coloridas */
+.ad-row-blacklisted {
+  background: rgba(239, 68, 68, 0.06) !important;
+  border-left: 3px solid var(--red);
+}
+
+.ad-row-whitelisted {
+  opacity: 0.55;
+}
+
+.ad-row-blacklisted:hover {
+  background: rgba(239, 68, 68, 0.1) !important;
+}
+
+/* Delete button */
+.ad-delete-btn {
+  opacity: 0.4;
+  transition: opacity 0.2s, color 0.2s;
+}
+
+.ad-delete-btn:hover {
+  opacity: 1;
+  color: var(--red) !important;
+}
+
+/* ── Top Anunciantes ──────────────────────────────────────────────────────── */
+
+.top-advertisers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.top-adv-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  transition: background 0.15s;
+}
+
+.top-adv-row:hover {
+  background: var(--bg-active);
+}
+
+.top-adv-row.flagged {
+  border-left: 3px solid var(--red);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.top-adv-rank {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  min-width: 28px;
+  text-align: center;
+  font-family: var(--font-mono);
+}
+
+.top-adv-row:nth-child(1) .top-adv-rank { color: #fbbf24; font-size: 16px; }
+.top-adv-row:nth-child(2) .top-adv-rank { color: #94a3b8; font-size: 15px; }
+.top-adv-row:nth-child(3) .top-adv-rank { color: #cd7f32; font-size: 15px; }
+
+.top-adv-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.top-adv-domain {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--green);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.top-adv-bar-bg {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.top-adv-bar {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--purple) 100%);
+  transition: width 0.5s ease;
+  min-width: 4px;
+}
+
+.top-adv-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.top-adv-count {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 35px;
+  text-align: right;
+}
+
+/* Stat card - red variant for blacklisted */
+.stat-icon.red {
+  background: rgba(239, 68, 68, 0.14);
+  color: #ef4444;
+}

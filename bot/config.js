@@ -36,4 +36,10 @@ module.exports = {
 
   // Delay entre tentativas de reconexão (ms)
   RECONNECT_DELAY_MS: 3000,
+
+  // ── 2Captcha (resolução automática de CAPTCHA) ─────────────────
+  // Chave API do 2Captcha para resolver reCAPTCHA automaticamente.
+  // Deixe vazio ('') para desativar — CAPTCHAs serão detectados mas não resolvidos.
+  // Crie sua conta em: https://2captcha.com
+  TWOCAPTCHA_API_KEY: '',
 };

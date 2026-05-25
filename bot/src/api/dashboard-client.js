@@ -194,6 +194,25 @@ function startHeartbeat(botId) {
         // Ignorar se ixBrowser estiver offline no momento; null previne sobrescrever no DB
       }
 
+      // Combina com perfis que o bot tem ativos no Puppeteer
+      // (garante que perfis abertos pelo bot não sejam marcados como 'closed')
+      try {
+        const puppeteerBot = require('../bot/puppeteer');
+        const activeProfiles = puppeteerBot.getActiveProfiles();
+        const activeIds = activeProfiles
+          .filter(p => p.connected)
+          .map(p => Number(p.profileId));
+
+        if (activeIds.length > 0) {
+          if (!openedProfiles) openedProfiles = [];
+          for (const id of activeIds) {
+            if (!openedProfiles.includes(id)) {
+              openedProfiles.push(id);
+            }
+          }
+        }
+      } catch (_) {}
+
       const payload = { status: 'online' };
       if (openedProfiles !== null) {
         payload.openedProfiles = openedProfiles;

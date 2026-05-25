@@ -150,7 +150,8 @@ const COMMANDS = {
   },
 
   /**
-   * Inicia o bot: abre todos os perfis da lista em série.
+   * Inicia o bot: abre todos os perfis e inicia pesquisa automática.
+   * Para cada perfil, busca o módulo de pesquisa vinculado e inicia o SearchWorker.
    * payload: { profileIds: number[] }
    */
   async start_bot({ profileIds = [] }) {
@@ -160,6 +161,13 @@ const COMMANDS = {
     }
 
     log('info', `▶ Iniciando bot com ${profileIds.length} perfil(is): ${profileIds.join(', ')}`);
+
+    const axios = require('axios');
+    const config = require('../../config');
+    const http = axios.create({
+      baseURL: config.DASHBOARD_API_URL,
+      timeout: config.API_TIMEOUT_MS,
+    });
 
     const results = [];
     for (let i = 0; i < profileIds.length; i++) {
@@ -171,6 +179,32 @@ const COMMANDS = {
         }
         const r = await COMMANDS.open_profile({ profileId });
         results.push({ profileId, ok: true, ...r });
+
+        // ── Busca módulo vinculado e inicia pesquisa automática ──────────
+        try {
+          const linksRes = await http.get('/api/profile-module-links');
+          const links = linksRes.data?.links || [];
+          const link = links.find(l => l.profile_id === profileId);
+
+          if (link && link.module_id) {
+            log('info', `📋 Perfil #${profileId} tem módulo "${link.label}" (ID: ${link.module_id}) vinculado.`);
+            log('info', `🔍 Iniciando pesquisa automática…`);
+
+            // Inicia pesquisa (em background — não bloqueia outros perfis)
+            await COMMANDS.start_search({
+              profileId,
+              moduleId: link.module_id,
+              rounds: 1,
+              searchMethod: 'direct_url',
+              twoCaptchaKey: config.TWOCAPTCHA_API_KEY || '',
+            });
+          } else {
+            log('info', `ℹ️ Perfil #${profileId} não tem módulo de pesquisa vinculado. Pulando pesquisa.`);
+          }
+        } catch (searchErr) {
+          log('error', `❌ Erro ao iniciar pesquisa para perfil #${profileId}: ${searchErr.message}`);
+        }
+
       } catch (err) {
         log('error', `❌ Falha ao abrir perfil #${profileId}: ${err.message}`);
         results.push({ profileId, ok: false, error: err.message });
@@ -181,6 +215,7 @@ const COMMANDS = {
     log('success', `✅ start_bot concluído: ${ok}/${profileIds.length} perfis abertos.`);
     return { ok: true, results };
   },
+
 
   /**
    * Pausa o bot: fecha todos os perfis abertos.
@@ -193,7 +228,92 @@ const COMMANDS = {
     return { ok: true };
   },
 
+  /**
+   * Inicia pesquisa de palavras-chave no Google para um perfil.
+   * payload: {
+   *   profileId: number,      — ID do perfil (deve estar aberto)
+   *   moduleId: number,       — ID do módulo de pesquisa (palavras)
+   *   rounds: number,         — Número de rodadas (padrão: 1)
+   *   searchMethod: string,   — 'direct_url' | 'homepage' (padrão: 'direct_url')
+   *   twoCaptchaKey: string,  — Chave API do 2Captcha (opcional)
+   * }
+   */
+  async start_search({ profileId, moduleId, rounds, searchMethod, twoCaptchaKey }) {
+    if (!profileId) throw new Error('profileId é obrigatório para start_search.');
+    if (!moduleId) throw new Error('moduleId é obrigatório para start_search.');
+
+    const session = puppeteerBot.getProfileSession(profileId);
+    if (!session) {
+      throw new Error(`Perfil #${profileId} não está conectado. Abra-o primeiro com open_profile.`);
+    }
+
+    log('info', `🔍 Iniciando pesquisa — perfil #${profileId}, módulo #${moduleId}…`);
+
+    const { SearchWorker } = require('../bot/search-worker');
+
+    // Cria o worker com callback de log para o dashboard
+    const worker = new SearchWorker(profileId, moduleId, BOT_ID, {
+      log: (msg) => log('info', msg),
+      rounds: rounds || 1,
+      searchMethod: searchMethod || 'direct_url',
+      twoCaptchaKey: twoCaptchaKey || '',
+    });
+
+    // Armazena referência para poder cancelar
+    if (!global._searchWorkers) global._searchWorkers = new Map();
+    global._searchWorkers.set(profileId, worker);
+
+    // Notifica dashboard que pesquisa começou (mantém status 'open' para o handler reconhecer)
+    client.sendStatus(BOT_ID, {
+      profileId,
+      status: 'open',
+      moduleId,
+    });
+
+    // Executa em background (não bloqueia o dispatcher)
+    const runPromise = worker.run().then((summary) => {
+      global._searchWorkers.delete(profileId);
+      client.sendStatus(BOT_ID, {
+        profileId,
+        status: 'open',
+        searchSummary: {
+          keywordsDone: summary.keywordsDone,
+          totalAdsFound: summary.totalAdsFound,
+          errors: summary.errors,
+          status: summary.status,
+        },
+      });
+      log('success', `✅ Pesquisa finalizada para perfil #${profileId}: ${summary.keywordsDone} palavras, ${summary.totalAdsFound} anúncios`);
+      return summary;
+    }).catch((err) => {
+      global._searchWorkers.delete(profileId);
+      log('error', `❌ Pesquisa falhou para perfil #${profileId}: ${err.message}`);
+      client.sendStatus(BOT_ID, { profileId, status: 'open' });
+    });
+
+    return { ok: true, message: `Pesquisa iniciada em background para perfil #${profileId}` };
+  },
+
+  /**
+   * Cancela pesquisa em andamento para um perfil.
+   * payload: { profileId: number }
+   */
+  async cancel_search({ profileId }) {
+    if (!profileId) throw new Error('profileId é obrigatório para cancel_search.');
+
+    if (!global._searchWorkers || !global._searchWorkers.has(profileId)) {
+      log('warn', `⚠️ Nenhuma pesquisa em andamento para perfil #${profileId}.`);
+      return { ok: false, reason: 'no_active_search' };
+    }
+
+    const worker = global._searchWorkers.get(profileId);
+    worker.cancel();
+    log('warn', `🛑 Pesquisa cancelada para perfil #${profileId}.`);
+    return { ok: true };
+  },
+
 };
+
 
 /**
  * Executa um comando recebido do dashboard.
