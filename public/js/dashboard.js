@@ -313,7 +313,7 @@ async function confirmDeleteBot(botId, name) {
     if (!data.ok) throw new Error(data.error);
     appendLog(null, 'warn', `Bot "${name}" removido do painel.`);
   } catch (err) {
-    alert(`Erro ao remover bot: ${err.message}`);
+    showToastModerno(`Erro ao remover bot: ${err.message}`, 'error');
   }
 }
 
@@ -784,6 +784,43 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
+
+function showToastModerno(message, type = 'info') {
+  let container = document.getElementById('toastNotificationsContainer');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toastNotificationsContainer';
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+
+  const box = document.createElement('div');
+  box.className = `toast-box ${type}`;
+
+  let icon = 'ℹ️';
+  if (type === 'success') icon = '✅';
+  else if (type === 'warning') icon = '⚠️';
+  else if (type === 'error') icon = '❌';
+
+  box.innerHTML = `
+    <div class="toast-icon-wrapper">${icon}</div>
+    <div class="toast-message">${escapeHtml(message)}</div>
+  `;
+
+  container.appendChild(box);
+
+  setTimeout(() => {
+    box.classList.add('toast-out');
+    box.addEventListener('animationend', () => {
+      box.remove();
+      if (container.children.length === 0) {
+        container.remove();
+      }
+    });
+  }, 3000);
+}
+
+window.showToastModerno = showToastModerno;
 
 // Log de inicialização
 appendLog(null, 'info', 'Dashboard iniciado. Aguardando bots...');

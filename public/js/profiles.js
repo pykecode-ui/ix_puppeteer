@@ -6,6 +6,38 @@
 
 'use strict';
 
+function showToastModerno(message, type = 'info') {
+  if (typeof window.showToastModerno === 'function') {
+    window.showToastModerno(message, type);
+  } else {
+    let container = document.getElementById('toastNotificationsContainer');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toastNotificationsContainer';
+      container.className = 'toast-container';
+      document.body.appendChild(container);
+    }
+    const box = document.createElement('div');
+    box.className = `toast-box ${type}`;
+    let icon = 'ℹ️';
+    if (type === 'success') icon = '✅';
+    else if (type === 'warning') icon = '⚠️';
+    else if (type === 'error') icon = '❌';
+    box.innerHTML = `
+      <div class="toast-icon-wrapper">${icon}</div>
+      <div class="toast-message">${message}</div>
+    `;
+    container.appendChild(box);
+    setTimeout(() => {
+      box.classList.add('toast-out');
+      box.addEventListener('animationend', () => {
+        box.remove();
+        if (container.children.length === 0) container.remove();
+      });
+    }, 3000);
+  }
+}
+
 // ── Estado dos perfis ─────────────────────────────────────────────────────────
 const profilesState = {
   profiles: [],        // Array de ix_profiles
@@ -147,7 +179,7 @@ function setupProfileForm() {
     const notes = document.getElementById('pfSingleNotes').value.trim() || null;
 
     if (!profileId || profileId <= 0) {
-      alert('Digite um ID de perfil válido.');
+      showToastModerno('Digite um ID de perfil válido.', 'warning');
       return;
     }
 
@@ -168,7 +200,7 @@ function setupProfileForm() {
       .filter((n) => !isNaN(n) && n > 0);
 
     if (ids.length === 0) {
-      alert('Nenhum ID válido encontrado. Use vírgulas, espaços ou quebras de linha.');
+      showToastModerno('Nenhum ID válido encontrado. Use vírgulas, espaços ou quebras de linha.', 'warning');
       return;
     }
 
@@ -194,7 +226,7 @@ async function createProfiles(profileIds, name, notes) {
     showToast('online', `✅ ${data.message}`, null);
     await loadProfiles();
   } catch (err) {
-    alert(`Erro ao criar perfis: ${err.message}`);
+    showToastModerno(`Erro ao criar perfis: ${err.message}`, 'error');
     appendLog(null, 'error', `Erro ao criar perfis: ${err.message}`);
   }
 }
@@ -221,7 +253,7 @@ async function editProfilePrompt(profileId) {
     appendLog(null, 'success', `Perfil #${profileId} atualizado.`);
     await loadProfiles();
   } catch (err) {
-    alert(`Erro ao atualizar perfil: ${err.message}`);
+    showToastModerno(`Erro ao atualizar perfil: ${err.message}`, 'error');
   }
 }
 
@@ -310,7 +342,7 @@ async function deleteProfile(profileId) {
     appendLog(null, 'warn', `Perfil #${profileId} removido.`);
     showToast('offline', `🗑️ Perfil #${profileId} removido com sucesso.`, null);
   } catch (err) {
-    alert(`Erro ao remover perfil: ${err.message}`);
+    showToastModerno(`Erro ao remover perfil: ${err.message}`, 'error');
   } finally {
     profilesState._isBusy = false;
     // Agora faz o re-render que foi adiado
@@ -573,7 +605,7 @@ function setupProfileAssignmentsModal() {
       appendLog(null, 'success', `Bot ${botId.slice(0, 8)}: ${data.message}`);
       showToast('online', `💾 Perfis salvos para o bot.`, null);
     } catch (err) {
-      alert(`Erro ao salvar atribuições: ${err.message}`);
+      showToastModerno(`Erro ao salvar atribuições: ${err.message}`, 'error');
     }
   });
 }
@@ -700,7 +732,7 @@ document.addEventListener('DOMContentLoaded', () => {
       closeAssignBotModal();
       await loadProfiles(); // Recarrega tabela com novos badges
     } catch (err) {
-      alert(`Erro ao salvar vínculos: ${err.message}`);
+      showToastModerno(`Erro ao salvar vínculos: ${err.message}`, 'error');
     } finally {
       btn.disabled = false;
       btn.textContent = '💾 Salvar Vínculos';
@@ -800,7 +832,7 @@ async function selectModuleForProfile(profileId, moduleId) {
     if (typeof showToast === 'function') showToast('online', `📦 Módulo vinculado ao perfil #${profileId}!`);
     renderModalAssignments(); // Recarrega tabela
   } catch (err) {
-    alert(`Erro ao vincular módulo: ${err.message}`);
+    showToastModerno(`Erro ao vincular módulo: ${err.message}`, 'error');
   }
 }
 
@@ -814,7 +846,7 @@ async function unlinkModule(profileId) {
     if (typeof showToast === 'function') showToast('offline', `❌ Módulo desvinculado do perfil #${profileId}`);
     renderModalAssignments();
   } catch (err) {
-    alert(`Erro ao desvincular módulo: ${err.message}`);
+    showToastModerno(`Erro ao desvincular módulo: ${err.message}`, 'error');
   }
 }
 
@@ -887,7 +919,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const loopCount = isInfinite ? 1 : parseInt(document.getElementById('loopConfigCount').value);
 
     if (!isInfinite && (isNaN(loopCount) || loopCount < 1)) {
-      alert('Por favor, insira um número válido de repetições (mínimo 1).');
+      showToastModerno('Por favor, insira um número válido de repetições (mínimo 1).', 'warning');
       return;
     }
 
@@ -913,7 +945,7 @@ document.addEventListener('DOMContentLoaded', () => {
       closeLoopConfigModal();
       await loadProfiles();
     } catch (err) {
-      alert(`Erro ao salvar configurações de repetição: ${err.message}`);
+      showToastModerno(`Erro ao salvar configurações de repetição: ${err.message}`, 'error');
     } finally {
       btn.disabled = false;
       btn.textContent = '💾 Salvar Configurações';

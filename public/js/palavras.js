@@ -19,12 +19,44 @@ function escapeHtmlP(str) {
   return str.replace(/[&<>"']/g, (c) => map[c]);
 }
 
-function showToastP(type, msg) {
-  if (typeof showToast === 'function') {
-    showToast(type, msg);
-  } else {
-    console.log(`[${type}] ${msg}`);
+function showToast(message, type = 'info') {
+  let container = document.getElementById('toastNotificationsContainer');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toastNotificationsContainer';
+    container.className = 'toast-container';
+    document.body.appendChild(container);
   }
+
+  const box = document.createElement('div');
+  box.className = `toast-box ${type}`;
+
+  let icon = 'ℹ️';
+  if (type === 'success') icon = '✅';
+  else if (type === 'warning') icon = '⚠️';
+  else if (type === 'error') icon = '❌';
+
+  box.innerHTML = `
+    <div class="toast-icon-wrapper">${icon}</div>
+    <div class="toast-message">${escapeHtmlP(message)}</div>
+  `;
+
+  container.appendChild(box);
+
+  setTimeout(() => {
+    box.classList.add('toast-out');
+    box.addEventListener('animationend', () => {
+      box.remove();
+      if (container.children.length === 0) {
+        container.remove();
+      }
+    });
+  }, 3000);
+}
+
+function showToastP(type, msg) {
+  const mappedType = type === 'online' ? 'success' : (type === 'offline' ? 'error' : type);
+  showToast(msg, mappedType);
 }
 
 // ── Carregar Módulos ─────────────────────────────────────────────────────────
@@ -140,7 +172,7 @@ async function createModule() {
     descInput.value = '';
     await loadModules();
   } catch (err) {
-    alert(`Erro ao criar módulo: ${err.message}`);
+    showToast(`Erro ao criar módulo: ${err.message}`, 'error');
   }
 }
 
@@ -152,7 +184,7 @@ async function editModule(id) {
   const newLabel = prompt('Novo label para o módulo:', mod.label);
   if (newLabel === null) return; // Cancelou
   if (!newLabel.trim()) {
-    alert('O label não pode ser vazio.');
+    showToast('O label não pode ser vazio.', 'warning');
     return;
   }
 
@@ -179,7 +211,7 @@ async function editModule(id) {
       await openModuleDetail(id);
     }
   } catch (err) {
-    alert(`Erro ao editar módulo: ${err.message}`);
+    showToast(`Erro ao editar módulo: ${err.message}`, 'error');
   }
 }
 
@@ -201,7 +233,7 @@ async function deleteModule(id, label) {
 
     await loadModules();
   } catch (err) {
-    alert(`Erro ao excluir módulo: ${err.message}`);
+    showToast(`Erro ao excluir módulo: ${err.message}`, 'error');
   }
 }
 
@@ -218,7 +250,7 @@ async function toggleModule(id, isActive) {
 
     await loadModules();
   } catch (err) {
-    alert(`Erro ao alterar status: ${err.message}`);
+    showToast(`Erro ao alterar status: ${err.message}`, 'error');
   }
 }
 
@@ -310,7 +342,7 @@ async function addWords() {
     await loadModules(); // Atualiza contagem
     await openModuleDetail(moduleId); // Recarrega palavras
   } catch (err) {
-    alert(`Erro ao adicionar palavras: ${err.message}`);
+    showToast(`Erro ao adicionar palavras: ${err.message}`, 'error');
   }
 }
 
@@ -319,7 +351,7 @@ async function editWord(moduleId, wordId, currentWord) {
   const newWord = prompt('Editar palavra:', currentWord);
   if (newWord === null) return;
   if (!newWord.trim()) {
-    alert('A palavra não pode ser vazia.');
+    showToast('A palavra não pode ser vazia.', 'warning');
     return;
   }
 
@@ -334,7 +366,7 @@ async function editWord(moduleId, wordId, currentWord) {
 
     await openModuleDetail(moduleId);
   } catch (err) {
-    alert(`Erro ao editar palavra: ${err.message}`);
+    showToast(`Erro ao editar palavra: ${err.message}`, 'error');
   }
 }
 
@@ -350,7 +382,7 @@ async function deleteWord(moduleId, wordId) {
     await loadModules(); // Atualiza contagem
     await openModuleDetail(moduleId); // Recarrega palavras
   } catch (err) {
-    alert(`Erro ao excluir palavra: ${err.message}`);
+    showToast(`Erro ao excluir palavra: ${err.message}`, 'error');
   }
 }
 
@@ -371,7 +403,7 @@ async function clearAllWords() {
     await loadModules();
     await openModuleDetail(moduleId);
   } catch (err) {
-    alert(`Erro ao limpar palavras: ${err.message}`);
+    showToast(`Erro ao limpar palavras: ${err.message}`, 'error');
   }
 }
 

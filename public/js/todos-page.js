@@ -32,6 +32,41 @@ function truncate(str, max = 60) {
   return str.length > max ? str.slice(0, max) + '…' : str;
 }
 
+function showToast(message, type = 'info') {
+  let container = document.getElementById('toastNotificationsContainer');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toastNotificationsContainer';
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+
+  const box = document.createElement('div');
+  box.className = `toast-box ${type}`;
+
+  let icon = 'ℹ️';
+  if (type === 'success') icon = '✅';
+  else if (type === 'warning') icon = '⚠️';
+  else if (type === 'error') icon = '❌';
+
+  box.innerHTML = `
+    <div class="toast-icon-wrapper">${icon}</div>
+    <div class="toast-message">${escapeHtmlAds(message)}</div>
+  `;
+
+  container.appendChild(box);
+
+  setTimeout(() => {
+    box.classList.add('toast-out');
+    box.addEventListener('animationend', () => {
+      box.remove();
+      if (container.children.length === 0) {
+        container.remove();
+      }
+    });
+  }, 3000);
+}
+
 function positionBadge(pos) {
   const map = {
     top:     { label: '⬆ Topo', cls: 'pos-top' },
@@ -266,15 +301,16 @@ function renderAdsTable() {
         const data = await res.json();
         if (data.ok) {
           if (data.alreadyExists) {
-            alert(data.message);
+            showToast(data.message, 'warning');
           } else {
+            showToast('Domínio adicionado à Blacklist!', 'success');
             loadAllAds();
           }
         } else {
-          alert('Erro: ' + (data.error || 'Falha ao salvar'));
+          showToast('Erro: ' + (data.error || 'Falha ao salvar'), 'error');
         }
       } catch (err) {
-        alert('Erro de rede: ' + err.message);
+        showToast('Erro de rede: ' + err.message, 'error');
       }
     });
   });
@@ -294,15 +330,16 @@ function renderAdsTable() {
         const data = await res.json();
         if (data.ok) {
           if (data.alreadyExists) {
-            alert(data.message);
+            showToast(data.message, 'warning');
           } else {
+            showToast('Domínio adicionado à Safelist!', 'success');
             loadAllAds();
           }
         } else {
-          alert('Erro: ' + (data.error || 'Falha ao salvar'));
+          showToast('Erro: ' + (data.error || 'Falha ao salvar'), 'error');
         }
       } catch (err) {
-        alert('Erro de rede: ' + err.message);
+        showToast('Erro de rede: ' + err.message, 'error');
       }
     });
   });
