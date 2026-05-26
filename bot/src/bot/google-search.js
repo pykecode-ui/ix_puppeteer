@@ -480,6 +480,35 @@ async function harvestSerpAds(page, log = console.log) {
         const descEl = el.querySelector('.yDfsy, .pc3Sdb, .VwiC3b, [data-snf], .MUxGbd:not([role="heading"]):not(h3):not(a)');
         if (descEl) adDescription = (descEl.innerText || '').trim().slice(0, 300);
 
+        // Heurística de fallback caso o seletor padrão falhe ou retorne texto muito curto
+        if (!adDescription || adDescription.length < 10) {
+          try {
+            const textNodes = Array.from(el.querySelectorAll('div, span, p'))
+              .filter(node => {
+                // Não pode estar dentro de um link ou botão
+                if (node.closest('a') || node.closest('button')) return false;
+
+                const text = (node.innerText || '').trim();
+                if (text.length < 20 || text.length > 350) return false;
+
+                // Ignora URLs de exibição
+                if (text.includes('›') || text.includes('www.') || text.includes('http')) return false;
+
+                // Garante que é um elemento folha ou não tem divs/p internos
+                const childDivs = node.querySelectorAll('div, p');
+                if (childDivs.length > 0) return false;
+
+                return true;
+              });
+
+            if (textNodes.length > 0) {
+              // Ordena pelo tamanho do texto decrescente e pega o maior
+              textNodes.sort((a, b) => b.innerText.length - a.innerText.length);
+              adDescription = (textNodes[0].innerText || '').trim().slice(0, 300);
+            }
+          } catch (_) {}
+        }
+
         // Dados do slot
         const dataPcu = (primaryLink.getAttribute('data-pcu') || '').trim();
         const dataRw = (primaryLink.getAttribute('data-rw') || '').trim();

@@ -187,7 +187,7 @@ function renderAdsTable() {
         const pcuVal = ad.data_pcu || '';
         const rwVal = ad.data_rw || '';
 
-        const rawTitles = ad.all_titles || (ad.ad_title ? `${ad.ad_title} ::: ${ad.ad_description || ''}` : '');
+        const rawTitles = ad.all_titles || (ad.ad_title ? (ad.ad_description ? `${ad.ad_title} ::: ${ad.ad_description}` : ad.ad_title) : '');
         const titles = [...new Set(rawTitles.split(' ||| ').map(t => t.trim()).filter(Boolean))];
 
         return `
