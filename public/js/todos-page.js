@@ -265,7 +265,11 @@ function renderAdsTable() {
         });
         const data = await res.json();
         if (data.ok) {
-          loadAllAds();
+          if (data.alreadyExists) {
+            alert(data.message);
+          } else {
+            loadAllAds();
+          }
         } else {
           alert('Erro: ' + (data.error || 'Falha ao salvar'));
         }
@@ -289,7 +293,11 @@ function renderAdsTable() {
         });
         const data = await res.json();
         if (data.ok) {
-          loadAllAds();
+          if (data.alreadyExists) {
+            alert(data.message);
+          } else {
+            loadAllAds();
+          }
         } else {
           alert('Erro: ' + (data.error || 'Falha ao salvar'));
         }

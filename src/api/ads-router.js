@@ -265,8 +265,31 @@ function createAdsRouter(io) {
       if (!pattern || !pattern.trim()) {
         return res.status(400).json({ ok: false, error: 'O campo "pattern" é obrigatório.' });
       }
-      const rule = adsModels.createWhitelistRule({ pattern: pattern.trim(), match_type, description });
-      if (io) io.emit('ads:whitelist:updated');
+      const trimmed = pattern.trim();
+      const db = adsModels.getAdsDB();
+
+      // 1. Verifica se já existe uma regra para este padrão
+      const existing = db.prepare('SELECT id FROM whitelist_rules WHERE LOWER(pattern) = LOWER(?)').get(trimmed);
+      if (existing) {
+        return res.json({ ok: true, alreadyExists: true, message: 'Este domínio já está na Safelist.' });
+      }
+
+      // 2. Cria a nova regra
+      const rule = adsModels.createWhitelistRule({ pattern: trimmed, match_type, description });
+
+      // 3. Aplica a nova regra imediatamente a todos os anúncios correspondentes
+      const like = `%${trimmed}%`;
+      db.prepare(`
+        UPDATE serp_ads
+        SET is_whitelisted = 1, whitelist_rule_id = ?
+        WHERE (LOWER(display_url) LIKE LOWER(?) OR LOWER(data_pcu) LIKE LOWER(?) OR LOWER(href_decoded) LIKE LOWER(?))
+          AND is_whitelisted = 0
+      `).run(rule.id, like, like, like);
+
+      if (io) {
+        io.emit('ads:whitelist:updated');
+        io.emit('ads:updated');
+      }
       res.json({ ok: true, rule });
     } catch (err) {
       res.status(500).json({ ok: false, error: err.message });
@@ -316,10 +339,33 @@ function createAdsRouter(io) {
       if (!pattern || !pattern.trim()) {
         return res.status(400).json({ ok: false, error: 'O campo "pattern" é obrigatório.' });
       }
+      const trimmed = pattern.trim();
+      const db = adsModels.getAdsDB();
+
+      // 1. Verifica se já existe uma regra para este padrão
+      const existing = db.prepare('SELECT id FROM blacklist_rules WHERE LOWER(pattern) = LOWER(?)').get(trimmed);
+      if (existing) {
+        return res.json({ ok: true, alreadyExists: true, message: 'Este domínio já está na Blacklist.' });
+      }
+
+      // 2. Cria a nova regra
       const rule = adsModels.createBlacklistRule({
-        pattern: pattern.trim(), match_type, description, priority, action,
+        pattern: trimmed, match_type, description, priority, action,
       });
-      if (io) io.emit('ads:blacklist:updated');
+
+      // 3. Aplica a nova regra imediatamente a todos os anúncios correspondentes
+      const like = `%${trimmed}%`;
+      db.prepare(`
+        UPDATE serp_ads
+        SET is_blacklisted = 1, blacklist_rule_id = ?
+        WHERE (LOWER(display_url) LIKE LOWER(?) OR LOWER(data_pcu) LIKE LOWER(?) OR LOWER(href_decoded) LIKE LOWER(?))
+          AND is_blacklisted = 0
+      `).run(rule.id, like, like, like);
+
+      if (io) {
+        io.emit('ads:blacklist:updated');
+        io.emit('ads:updated');
+      }
       res.json({ ok: true, rule });
     } catch (err) {
       res.status(500).json({ ok: false, error: err.message });

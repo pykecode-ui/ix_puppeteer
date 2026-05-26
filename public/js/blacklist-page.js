@@ -260,7 +260,11 @@ function renderAdsTable() {
         });
         const data = await res.json();
         if (data.ok) {
-          loadBlacklistAds();
+          if (data.alreadyExists) {
+            alert(data.message);
+          } else {
+            loadBlacklistAds();
+          }
         } else {
           alert('Erro: ' + (data.error || 'Falha ao salvar'));
         }
@@ -284,7 +288,11 @@ function renderAdsTable() {
         });
         const data = await res.json();
         if (data.ok) {
-          loadBlacklistAds();
+          if (data.alreadyExists) {
+            alert(data.message);
+          } else {
+            loadBlacklistAds();
+          }
         } else {
           alert('Erro: ' + (data.error || 'Falha ao salvar'));
         }

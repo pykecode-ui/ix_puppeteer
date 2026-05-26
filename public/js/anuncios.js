@@ -288,8 +288,12 @@ function renderAdsTable() {
         });
         const data = await res.json();
         if (data.ok) {
-          loadAds();
-          loadAdsStats();
+          if (data.alreadyExists) {
+            alert(data.message);
+          } else {
+            loadAds();
+            loadAdsStats();
+          }
         } else {
           alert('Erro: ' + (data.error || 'Falha ao salvar'));
         }
@@ -313,8 +317,12 @@ function renderAdsTable() {
         });
         const data = await res.json();
         if (data.ok) {
-          loadAds();
-          loadAdsStats();
+          if (data.alreadyExists) {
+            alert(data.message);
+          } else {
+            loadAds();
+            loadAdsStats();
+          }
         } else {
           alert('Erro: ' + (data.error || 'Falha ao salvar'));
         }
