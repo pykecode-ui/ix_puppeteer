@@ -263,12 +263,14 @@ function renderAdsTable() {
             }
           </td>
           <td>
-            <span class="device-badge ${(ad.device_type || 'desktop').toLowerCase()}" title="${(ad.device_type || 'desktop') === 'mobile' ? 'Mobile' : 'Desktop'}">
-              ${(ad.device_type || 'desktop') === 'mobile' ? '📱' : '💻'}
-            </span>
-            <span class="lang-badge" style="margin-left: 4px;">
-              🌐 ${escapeHtmlAds(ad.browser_language || 'PT').toUpperCase()}
-            </span>
+            <div style="display: flex; align-items: center; gap: 4px; white-space: nowrap;">
+              <span class="device-badge ${(ad.device_type || 'desktop').toLowerCase()}" title="${(ad.device_type || 'desktop') === 'mobile' ? 'Mobile' : 'Desktop'}">
+                ${(ad.device_type || 'desktop') === 'mobile' ? '📱' : '💻'}
+              </span>
+              <span class="lang-badge">
+                🌐 ${escapeHtmlAds(ad.browser_language || 'PT').toUpperCase()}
+              </span>
+            </div>
           </td>
           <td>${ad.geo_country ? `<span class="geo-badge geo-country">🌍 ${escapeHtmlAds(ad.geo_country)}</span>` : '<span class="dim-text">—</span>'}</td>
           <td>${(ad.geo_region || ad.geo_city) ? `<span class="geo-badge geo-region">📍 ${escapeHtmlAds([ad.geo_region, ad.geo_city].filter(Boolean).join(' / '))}</span>` : '<span class="dim-text">—</span>'}</td>
