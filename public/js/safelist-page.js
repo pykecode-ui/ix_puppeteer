@@ -187,7 +187,8 @@ function renderAdsTable() {
         const pcuVal = ad.data_pcu || '';
         const rwVal = ad.data_rw || '';
 
-        const titles = [...new Set((ad.all_titles || ad.ad_title || '').split(' ||| ').map(t => t.trim()).filter(Boolean))];
+        const rawTitles = ad.all_titles || (ad.ad_title ? `${ad.ad_title} ::: ${ad.ad_description || ''}` : '');
+        const titles = [...new Set(rawTitles.split(' ||| ').map(t => t.trim()).filter(Boolean))];
 
         return `
         <tr data-ad-ids="${ad.all_ids || ad.id}" class="ad-row-whitelisted">
@@ -399,11 +400,17 @@ function openAdTitlesModal(domain, titles) {
   if (!overlay || !domainLabel || !container) return;
 
   domainLabel.textContent = domain;
-  container.innerHTML = titles.map(title => `
-    <li class="ad-title-item" style="padding:8px 12px; background:var(--background-secondary); border-radius:6px; border:1px solid var(--border-color); font-size:13px; color:var(--text-primary); word-break:break-word;">
-      ✨ ${escapeHtmlAds(title)}
-    </li>
-  `).join('');
+  container.innerHTML = titles.map(tStr => {
+    const parts = tStr.split(' ::: ');
+    const title = parts[0] || '';
+    const desc = parts[1] || '';
+    return `
+      <li class="ad-title-item" style="padding:10px 14px; background:var(--background-secondary); border-radius:6px; border:1px solid var(--border-color); font-size:13px; color:var(--text-primary); word-break:break-word; margin-bottom:8px; display:flex; flex-direction:column; gap:4px;">
+        <div style="font-weight:600; color:var(--text-primary);">✨ ${escapeHtmlAds(title)}</div>
+        ${desc ? `<div style="font-size:11px; color:var(--text-secondary); opacity:0.85; line-height:1.4;">${escapeHtmlAds(desc)}</div>` : ''}
+      </li>
+    `;
+  }).join('');
 
   overlay.classList.add('visible');
 }

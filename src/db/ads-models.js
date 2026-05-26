@@ -605,7 +605,7 @@ function getAllAds({ limit = 50, offset = 0, keyword, domain, is_blacklisted, is
       MAX(device_type) AS device_type,
       MAX(browser_language) AS browser_language,
       GROUP_CONCAT(id) AS all_ids,
-      GROUP_CONCAT(ad_title, ' ||| ') AS all_titles
+      GROUP_CONCAT(ad_title || ' ::: ' || COALESCE(ad_description, ''), ' ||| ') AS all_titles
     FROM serp_ads ${whereClause}
     GROUP BY COALESCE(display_url, '')
     ORDER BY ${orderClause}

@@ -264,7 +264,9 @@ class SearchWorker {
         if (isWhitelisted) statusIcon = '⏭️';
 
         this.log(
-          `  ${statusIcon} [${ad.position}] ${ad.adTitle?.slice(0, 50) || 'Sem título'} → ${ad.displayUrl || ad.hrefDecoded?.slice(0, 60) || '?'}`
+          `  ${statusIcon} [${ad.position}] ${ad.adTitle?.slice(0, 50) || 'Sem título'}`
+          + (ad.adDescription ? ` | Desc: ${ad.adDescription.slice(0, 60)}...` : '')
+          + ` → ${ad.displayUrl || ad.hrefDecoded?.slice(0, 60) || '?'}`
           + (isWhitelisted ? ' (whitelist — ignorado)' : '')
           + (isBlacklisted ? ` (blacklist — ${blacklistRule?.action || 'flag'})` : '')
         );
