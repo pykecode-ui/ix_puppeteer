@@ -477,7 +477,7 @@ async function harvestSerpAds(page, log = console.log) {
 
         // Descrição do anúncio
         let adDescription = '';
-        const descEl = el.querySelector('.VwiC3b, [data-snf], .MUxGbd');
+        const descEl = el.querySelector('.yDfsy, .pc3Sdb, .VwiC3b, [data-snf], .MUxGbd:not([role="heading"]):not(h3):not(a)');
         if (descEl) adDescription = (descEl.innerText || '').trim().slice(0, 300);
 
         // Dados do slot

@@ -406,9 +406,9 @@ function openAdTitlesModal(domain, titles) {
 
   domainLabel.textContent = domain;
   container.innerHTML = titles.map(tStr => {
-    const parts = tStr.split(' ::: ');
-    const title = parts[0] || '';
-    const desc = parts[1] || '';
+    const parts = tStr.split(':::');
+    const title = (parts[0] || '').trim();
+    const desc = (parts[1] || '').trim();
     return `
       <li class="ad-title-item" style="padding:10px 14px; background:var(--background-secondary); border-radius:6px; border:1px solid var(--border-color); font-size:13px; color:var(--text-primary); word-break:break-word; margin-bottom:8px; display:flex; flex-direction:column; gap:4px;">
         <div style="font-weight:600; color:var(--text-primary);">✨ ${escapeHtmlAds(title)}</div>
