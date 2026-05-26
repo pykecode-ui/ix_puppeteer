@@ -85,6 +85,8 @@ async function loadSuspiciousAds() {
     limit: suspiciousState.perPage,
     offset,
     is_suspicious: 'true',
+    is_blacklisted: 'false',
+    is_whitelisted: 'false',
     orderBy: suspiciousState.orderBy
   });
 

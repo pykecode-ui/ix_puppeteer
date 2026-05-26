@@ -200,11 +200,38 @@ function getAdsByDomain(domain, limit = 100) {
  */
 function getAdsStats() {
   const db = getAdsDB();
-  const totalAds = db.prepare('SELECT COUNT(*) AS count FROM serp_ads').get().count;
-  const totalClicked = db.prepare('SELECT COUNT(*) AS count FROM serp_ads WHERE was_clicked = 1').get().count;
-  const totalWhitelisted = db.prepare('SELECT COUNT(*) AS count FROM serp_ads WHERE is_whitelisted = 1').get().count;
-  const totalBlacklisted = db.prepare('SELECT COUNT(*) AS count FROM serp_ads WHERE is_blacklisted = 1').get().count;
-  const totalSuspicious = db.prepare('SELECT COUNT(*) AS count FROM serp_ads WHERE is_suspicious = 1').get().count;
+
+  // Contagens baseadas em anúncios únicos (agrupados por display_url)
+  const totalAds = db.prepare(`
+    SELECT COUNT(*) AS count FROM (
+      SELECT 1 FROM serp_ads GROUP BY COALESCE(display_url, '')
+    )
+  `).get().count;
+
+  const totalClicked = db.prepare(`
+    SELECT COUNT(*) AS count FROM (
+      SELECT 1 FROM serp_ads WHERE was_clicked = 1 GROUP BY COALESCE(display_url, '')
+    )
+  `).get().count;
+
+  const totalWhitelisted = db.prepare(`
+    SELECT COUNT(*) AS count FROM (
+      SELECT 1 FROM serp_ads WHERE is_whitelisted = 1 GROUP BY COALESCE(display_url, '')
+    )
+  `).get().count;
+
+  const totalBlacklisted = db.prepare(`
+    SELECT COUNT(*) AS count FROM (
+      SELECT 1 FROM serp_ads WHERE is_blacklisted = 1 GROUP BY COALESCE(display_url, '')
+    )
+  `).get().count;
+
+  const totalSuspicious = db.prepare(`
+    SELECT COUNT(*) AS count FROM (
+      SELECT 1 FROM serp_ads WHERE is_suspicious = 1 AND is_blacklisted = 0 AND is_whitelisted = 0 GROUP BY COALESCE(display_url, '')
+    )
+  `).get().count;
+
   const totalSessions = db.prepare('SELECT COUNT(*) AS count FROM search_sessions').get().count;
   const totalSearches = db.prepare('SELECT COUNT(*) AS count FROM search_executions').get().count;
   const uniqueKeywords = db.prepare('SELECT COUNT(DISTINCT keyword) AS count FROM search_executions').get().count;
