@@ -56,6 +56,12 @@ function flagBadges(ad) {
       Safelist
     </span>`;
   }
+  if (ad.is_suspicious) {
+    html += `<span class="ad-flag suspicious" title="Suspeito">
+      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:3px;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Suspeito
+    </span>`;
+  }
   return html || '<span class="dim-text">—</span>';
 }
 
@@ -145,10 +151,11 @@ function renderAdsTable() {
 
         const titles = [...new Set((ad.all_titles || ad.ad_title || '').split(' ||| ').map(t => t.trim()).filter(Boolean))];
 
-        // Define a classe de cor da linha conforme a classificação
+        // Define a classe de col da linha conforme a classificação
         let rowClass = '';
         if (ad.is_blacklisted) rowClass = 'ad-row-blacklisted';
         else if (ad.is_whitelisted) rowClass = 'ad-row-whitelisted';
+        else if (ad.is_suspicious) rowClass = 'ad-row-suspicious';
 
         return `
         <tr data-ad-ids="${ad.all_ids || ad.id}" class="${rowClass}">

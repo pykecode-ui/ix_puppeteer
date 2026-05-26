@@ -1,14 +1,14 @@
 /**
- * public/js/blacklist-page.js
+ * public/js/suspeitos-page.js
  * ─────────────────────────────────────────────────────────────────────────────
- * Módulo da página dedicada de Anúncios na Blacklist.
- * Exibe apenas os anúncios filtrados na blacklist, com suporte a busca,
- * ordenação, paginação e WebSocket para atualizações em tempo real.
+ * Módulo da página dedicada de Anúncios Suspeitos.
+ * Exibe apenas os anúncios cuja palavra pesquisada está contida no título,
+ * com suporte a busca, ordenação, paginação e WebSocket para tempo real.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 // ── Estado ──────────────────────────────────────────────────────────────────
-const blacklistState = {
+const suspiciousState = {
   ads: [],
   total: 0,
   page: 0,
@@ -71,38 +71,38 @@ function createEmptyState() {
   div.id = 'adsEmptyState';
   div.innerHTML = `
     <div class="empty-icon">📢</div>
-    <div class="empty-title">Nenhum anúncio na blacklist encontrado</div>
-    <div class="empty-desc">Anúncios marcados como blacklist aparecerão aqui em tempo real.</div>
+    <div class="empty-title">Nenhum anúncio suspeito encontrado</div>
+    <div class="empty-desc">Anúncios identificados com a palavra pesquisada no título aparecerão aqui em tempo real.</div>
   `;
   return div;
 }
 
-// ── Carregar Anúncios da Blacklist ──────────────────────────────────────────
+// ── Carregar Anúncios Suspeitos ─────────────────────────────────────────────
 
-async function loadBlacklistAds() {
-  const offset = blacklistState.page * blacklistState.perPage;
+async function loadSuspiciousAds() {
+  const offset = suspiciousState.page * suspiciousState.perPage;
   const params = new URLSearchParams({
-    limit: blacklistState.perPage,
+    limit: suspiciousState.perPage,
     offset,
-    is_blacklisted: 'true',
-    orderBy: blacklistState.orderBy
+    is_suspicious: 'true',
+    orderBy: suspiciousState.orderBy
   });
 
-  if (blacklistState.filterKeyword) params.set('keyword', blacklistState.filterKeyword);
-  if (blacklistState.filterDomain) params.set('domain', blacklistState.filterDomain);
+  if (suspiciousState.filterKeyword) params.set('keyword', suspiciousState.filterKeyword);
+  if (suspiciousState.filterDomain) params.set('domain', suspiciousState.filterDomain);
 
   try {
     const res = await fetch(`/api/ads/all?${params}`);
     const data = await res.json();
     if (!data.ok) return;
 
-    blacklistState.ads = data.ads || [];
-    blacklistState.total = data.total || 0;
+    suspiciousState.ads = data.ads || [];
+    suspiciousState.total = data.total || 0;
 
     renderAdsTable();
     updatePagination();
   } catch (err) {
-    console.error('[Blacklist] Erro ao carregar anúncios:', err);
+    console.error('[Suspeitos] Erro ao carregar anúncios:', err);
   }
 }
 
@@ -112,7 +112,7 @@ function renderAdsTable() {
   const container = document.getElementById('adsTableContainer');
   const emptyState = document.getElementById('adsEmptyState');
 
-  if (blacklistState.ads.length === 0) {
+  if (suspiciousState.ads.length === 0) {
     container.innerHTML = '';
     container.appendChild(emptyState || createEmptyState());
     if (emptyState) emptyState.style.display = 'flex';
@@ -141,7 +141,7 @@ function renderAdsTable() {
       </tr>
     </thead>
     <tbody>
-      ${blacklistState.ads.map(ad => {
+      ${suspiciousState.ads.map(ad => {
         const reps = ad.repetitions || 1;
         const repClass = reps >= 5 ? 'rep-high' : reps >= 2 ? 'rep-mid' : 'rep-low';
         const kwList = (ad.keywords || ad.keyword || '').split(',').filter(Boolean);
@@ -153,7 +153,7 @@ function renderAdsTable() {
         const titles = [...new Set((ad.all_titles || ad.ad_title || '').split(' ||| ').map(t => t.trim()).filter(Boolean))];
 
         return `
-        <tr data-ad-ids="${ad.all_ids || ad.id}" class="ad-row-blacklisted">
+        <tr data-ad-ids="${ad.all_ids || ad.id}" class="ad-row-suspicious">
           <td style="text-align:center;">
             <span class="ad-rep-badge ${repClass}">${reps}x</span>
           </td>
@@ -260,7 +260,7 @@ function renderAdsTable() {
         });
         const data = await res.json();
         if (data.ok) {
-          loadBlacklistAds();
+          loadSuspiciousAds();
         } else {
           alert('Erro: ' + (data.error || 'Falha ao salvar'));
         }
@@ -284,7 +284,7 @@ function renderAdsTable() {
         });
         const data = await res.json();
         if (data.ok) {
-          loadBlacklistAds();
+          loadSuspiciousAds();
         } else {
           alert('Erro: ' + (data.error || 'Falha ao salvar'));
         }
@@ -299,10 +299,10 @@ function renderAdsTable() {
     btn.addEventListener('click', async () => {
       const ids = (btn.dataset.adIds || '').split(',').map(Number).filter(Boolean);
       const count = ids.length;
-      if (!confirm(`Excluir ${count} registro${count > 1 ? 's' : ''} deste anúncio na blacklist?`)) return;
+      if (!confirm(`Excluir ${count} registro${count > 1 ? 's' : ''} deste anúncio suspeito?`)) return;
       try {
         await Promise.all(ids.map(id => fetch(`/api/ads/${id}`, { method: 'DELETE' })));
-        loadBlacklistAds();
+        loadSuspiciousAds();
       } catch (_) {}
     });
   });
@@ -311,216 +311,102 @@ function renderAdsTable() {
 // ── Paginação ───────────────────────────────────────────────────────────────
 
 function updatePagination() {
-  const pagination = document.getElementById('adsPagination');
+  const container = document.getElementById('adsPagination');
   const info = document.getElementById('adsPaginationInfo');
-  const prevBtn = document.getElementById('btnAdsPrevPage');
-  const nextBtn = document.getElementById('btnAdsNextPage');
+  const btnPrev = document.getElementById('btnAdsPrevPage');
+  const btnNext = document.getElementById('btnAdsNextPage');
 
-  if (blacklistState.total === 0) {
-    pagination.style.display = 'none';
+  if (suspiciousState.total <= suspiciousState.perPage) {
+    if (container) container.style.display = 'none';
     return;
   }
 
-  pagination.style.display = 'flex';
+  if (container) container.style.display = 'flex';
 
-  const start = blacklistState.page * blacklistState.perPage + 1;
-  const end = Math.min(start + blacklistState.perPage - 1, blacklistState.total);
-  const totalPages = Math.ceil(blacklistState.total / blacklistState.perPage);
+  const maxPage = Math.ceil(suspiciousState.total / suspiciousState.perPage) - 1;
+  const startIdx = suspiciousState.page * suspiciousState.perPage + 1;
+  const endIdx = Math.min((suspiciousState.page + 1) * suspiciousState.perPage, suspiciousState.total);
 
-  info.textContent = `${start}–${end} de ${blacklistState.total} anúncio(s) · Página ${blacklistState.page + 1}/${totalPages}`;
-  prevBtn.disabled = blacklistState.page <= 0;
-  nextBtn.disabled = end >= blacklistState.total;
+  if (info) {
+    info.textContent = `Exibindo ${startIdx}-${endIdx} de ${suspiciousState.total} domínios suspeitos`;
+  }
+
+  if (btnPrev) btnPrev.disabled = suspiciousState.page === 0;
+  if (btnNext) btnNext.disabled = suspiciousState.page >= maxPage;
 }
 
-// ── Modal de Títulos Históricos ──────────────────────────────────────────────
+// ── Modal de Histórico de Títulos ────────────────────────────────────────────
 
 function openAdTitlesModal(domain, titles) {
   const overlay = document.getElementById('adTitlesModalOverlay');
   const domainLabel = document.getElementById('adTitlesDomainLabel');
-  const container = document.getElementById('adTitlesListContainer');
-  if (!overlay || !domainLabel || !container) return;
+  const listContainer = document.getElementById('adTitlesListContainer');
 
-  domainLabel.textContent = domain;
-  container.innerHTML = titles.map(title => `
-    <li class="ad-title-item" style="padding:8px 12px; background:var(--background-secondary); border-radius:6px; border:1px solid var(--border-color); font-size:13px; color:var(--text-primary); word-break:break-word;">
-      ✨ ${escapeHtmlAds(title)}
+  if (!overlay || !listContainer) return;
+
+  if (domainLabel) domainLabel.textContent = domain;
+  listContainer.innerHTML = titles.map(title => `
+    <li style="padding: 10px 14px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; font-size:13px; color: var(--text-primary);">
+      ${escapeHtmlAds(title)}
     </li>
   `).join('');
 
-  overlay.classList.add('visible');
+  overlay.classList.add('active');
 }
 
-function initAdTitlesModal() {
+function closeAdTitlesModal() {
   const overlay = document.getElementById('adTitlesModalOverlay');
-  const btnClose = document.getElementById('btnCloseAdTitles');
-  const btnCloseOk = document.getElementById('btnCloseAdTitlesOk');
-
-  if (!overlay) return;
-
-  function closeModal() {
-    overlay.classList.remove('visible');
-  }
-
-  btnClose?.addEventListener('click', closeModal);
-  btnCloseOk?.addEventListener('click', closeModal);
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) closeModal();
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && overlay.classList.contains('visible')) closeModal();
-  });
+  if (overlay) overlay.classList.remove('active');
 }
 
-// ── Event Listeners ─────────────────────────────────────────────────────────
+// ── Bind de Eventos e Filtros ───────────────────────────────────────────────
 
-function setupEventListeners() {
-  const filterKeywordInput = document.getElementById('filterKeyword');
-  const filterDomainInput = document.getElementById('filterDomain');
-  const orderBySelect = document.getElementById('orderBy');
-  const btnApply = document.getElementById('btnApplyFilters');
+document.getElementById('btnApplyFilters')?.addEventListener('click', () => {
+  suspiciousState.filterKeyword = document.getElementById('filterKeyword')?.value.trim() || '';
+  suspiciousState.filterDomain = document.getElementById('filterDomain')?.value.trim() || '';
+  suspiciousState.orderBy = document.getElementById('orderBy')?.value || 'recent';
+  suspiciousState.page = 0;
+  loadSuspiciousAds();
+});
 
-  // Clique no botão Filtrar
-  btnApply?.addEventListener('click', () => {
-    blacklistState.filterKeyword = filterKeywordInput?.value.trim() || '';
-    blacklistState.filterDomain = filterDomainInput?.value.trim() || '';
-    blacklistState.orderBy = orderBySelect?.value || 'recent';
-    blacklistState.page = 0;
-    loadBlacklistAds();
-  });
-
-  // Enter nos inputs de pesquisa
-  [filterKeywordInput, filterDomainInput].forEach(input => {
-    input?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        btnApply?.click();
-      }
-    });
-  });
-
-  // Mudança rápida na ordenação
-  orderBySelect?.addEventListener('change', () => {
-    btnApply?.click();
-  });
-
-  // Botões de Paginação
-  document.getElementById('btnAdsPrevPage')?.addEventListener('click', () => {
-    if (blacklistState.page > 0) {
-      blacklistState.page--;
-      loadBlacklistAds();
-    }
-  });
-
-  document.getElementById('btnAdsNextPage')?.addEventListener('click', () => {
-    const maxPage = Math.ceil(blacklistState.total / blacklistState.perPage) - 1;
-    if (blacklistState.page < maxPage) {
-      blacklistState.page++;
-      loadBlacklistAds();
-    }
-  });
-
-  // Real-time via Socket (repassado pelo document.dispatchEvent no socket.js)
-  document.addEventListener('ads:new-ad', () => {
-    loadBlacklistAds();
-  });
-
-  document.addEventListener('ads:updated', () => {
-    loadBlacklistAds();
-  });
-}
-
-// ── Modal de Configuração da Blacklist ────────────────────────────────────────
-
-function initBlacklistModal() {
-  const overlay = document.getElementById('blacklistModalOverlay');
-  const textarea = document.getElementById('blacklistTextarea');
-  const wordCount = document.getElementById('blacklistWordCount');
-  const btnOpen = document.getElementById('btnOpenBlacklist');
-  const btnClose = document.getElementById('btnCloseBlacklist');
-  const btnCancel = document.getElementById('btnCancelBlacklist');
-  const btnSave = document.getElementById('btnSaveBlacklist');
-
-  if (!overlay || !textarea || !btnOpen) return;
-
-  function updateWordCount() {
-    const lines = textarea.value.split('\n').map(l => l.trim()).filter(Boolean);
-    wordCount.textContent = `${lines.length} regra${lines.length !== 1 ? 's' : ''}`;
+document.getElementById('btnAdsPrevPage')?.addEventListener('click', () => {
+  if (suspiciousState.page > 0) {
+    suspiciousState.page--;
+    loadSuspiciousAds();
   }
+});
 
-  async function loadBlacklistRules() {
-    try {
-      const res = await fetch('/api/ads/blacklist');
-      const data = await res.json();
-      if (data.ok && data.rules) {
-        textarea.value = data.rules.map(r => r.pattern).join('\n');
-      }
-    } catch (_) {}
-    updateWordCount();
+document.getElementById('btnAdsNextPage')?.addEventListener('click', () => {
+  const maxPage = Math.ceil(suspiciousState.total / suspiciousState.perPage) - 1;
+  if (suspiciousState.page < maxPage) {
+    suspiciousState.page++;
+    loadSuspiciousAds();
   }
+});
 
-  // Abrir modal
-  btnOpen.addEventListener('click', () => {
-    overlay.classList.add('visible');
-    loadBlacklistRules();
-    setTimeout(() => textarea.focus(), 100);
-  });
+// Modal Títulos
+document.getElementById('btnCloseAdTitles')?.addEventListener('click', closeAdTitlesModal);
+document.getElementById('btnCloseAdTitlesOk')?.addEventListener('click', closeAdTitlesModal);
+document.getElementById('adTitlesModalOverlay')?.addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeAdTitlesModal();
+});
 
-  // Fechar modal
-  function closeModal() {
-    overlay.classList.remove('visible');
+// ── Real-time via Socket (CustomEvents repassados pelo socket.js) ───────────
+
+document.addEventListener('ads:new-ad', (e) => {
+  // Se o anúncio for suspeito, recarrega a lista
+  const ad = e.detail;
+  if (ad && ad.is_suspicious) {
+    loadSuspiciousAds();
   }
+});
 
-  btnClose?.addEventListener('click', closeModal);
-  btnCancel?.addEventListener('click', closeModal);
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) closeModal();
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && overlay.classList.contains('visible')) closeModal();
-  });
-
-  textarea.addEventListener('input', updateWordCount);
-
-  btnSave.addEventListener('click', async () => {
-    const lines = textarea.value.split('\n').map(l => l.trim()).filter(Boolean);
-    btnSave.disabled = true;
-    btnSave.textContent = '⏳ Salvando...';
-
-    try {
-      const res = await fetch('/api/ads/blacklist/bulk-sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ patterns: lines }),
-      });
-      const data = await res.json();
-
-      if (data.ok) {
-        closeModal();
-        loadBlacklistAds();
-      } else {
-        alert('Erro: ' + (data.error || 'Falha ao salvar'));
-      }
-    } catch (err) {
-      alert('Erro de rede: ' + err.message);
-    } finally {
-      btnSave.disabled = false;
-      btnSave.textContent = '💾 Salvar';
-    }
-  });
-
-  if (typeof socket !== 'undefined') {
-    socket.on('ads:blacklist:updated', () => {
-      if (!overlay.classList.contains('visible')) {
-        loadBlacklistAds();
-      }
-    });
-  }
-}
+document.addEventListener('ads:updated', () => {
+  loadSuspiciousAds();
+});
 
 // ── Inicialização ───────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
-  initAdTitlesModal();
-  initBlacklistModal();
-  setupEventListeners();
-  loadBlacklistAds();
+  loadSuspiciousAds();
 });

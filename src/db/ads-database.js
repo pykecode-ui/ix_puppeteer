@@ -128,6 +128,7 @@ function initAdsDB() {
       geo_city          TEXT,
       is_whitelisted    INTEGER NOT NULL DEFAULT 0,
       is_blacklisted    INTEGER NOT NULL DEFAULT 0,
+      is_suspicious     INTEGER NOT NULL DEFAULT 0,
       whitelist_rule_id INTEGER,
       blacklist_rule_id INTEGER,
       was_clicked       INTEGER NOT NULL DEFAULT 0,
@@ -150,6 +151,16 @@ function initAdsDB() {
 
   // Migration: adiciona all_titles para agrupar títulos por domínio
   try { adsDb.exec(`ALTER TABLE serp_ads ADD COLUMN all_titles TEXT`); } catch (_) {}
+
+  // Migration: adiciona is_suspicious se não existir e atualiza registros antigos de forma case-insensitive
+  try {
+    adsDb.exec(`ALTER TABLE serp_ads ADD COLUMN is_suspicious INTEGER NOT NULL DEFAULT 0`);
+    adsDb.exec(`
+      UPDATE serp_ads 
+      SET is_suspicious = 1 
+      WHERE INSTR(LOWER(ad_title), LOWER(keyword)) > 0
+    `);
+  } catch (_) { /* coluna já existe */ }
 
   // position: 'top' | 'bottom' | 'middle' | 'shopping' | 'unknown'
 
@@ -254,6 +265,7 @@ function initAdsDB() {
     CREATE INDEX IF NOT EXISTS idx_ads_href_decoded    ON serp_ads(href_decoded);
     CREATE INDEX IF NOT EXISTS idx_ads_display_url     ON serp_ads(display_url);
     CREATE INDEX IF NOT EXISTS idx_ads_blacklisted     ON serp_ads(is_blacklisted);
+    CREATE INDEX IF NOT EXISTS idx_ads_suspicious      ON serp_ads(is_suspicious);
     CREATE INDEX IF NOT EXISTS idx_clicks_ad           ON ad_clicks(ad_id);
     CREATE INDEX IF NOT EXISTS idx_whitelist_active    ON whitelist_rules(is_active);
     CREATE INDEX IF NOT EXISTS idx_blacklist_active    ON blacklist_rules(is_active);

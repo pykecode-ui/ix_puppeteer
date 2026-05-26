@@ -135,6 +135,7 @@ function createSerpAd({
   is_whitelisted, is_blacklisted, whitelist_rule_id, blacklist_rule_id,
 }) {
   const now = nowBrasilia();
+  const is_suspicious = (ad_title && keyword && ad_title.toLowerCase().includes(keyword.toLowerCase())) ? 1 : 0;
   const info = getAdsDB().prepare(`
     INSERT INTO serp_ads (
       execution_id, session_id, keyword, position, slot_label, slot_index,
@@ -142,8 +143,9 @@ function createSerpAd({
       data_pcu, data_rw, data_ta_slot, data_ta_slot_pos,
       geo_country, geo_region, geo_city,
       is_whitelisted, is_blacklisted, whitelist_rule_id, blacklist_rule_id,
+      is_suspicious,
       found_at, all_titles
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     execution_id, session_id, keyword,
     position || 'unknown', slot_label || null, slot_index || null,
@@ -153,10 +155,11 @@ function createSerpAd({
     geo_country || null, geo_region || null, geo_city || null,
     is_whitelisted ? 1 : 0, is_blacklisted ? 1 : 0,
     whitelist_rule_id || null, blacklist_rule_id || null,
+    is_suspicious,
     now,
     ad_title || null
   );
-  return { id: info.lastInsertRowid, keyword, position, found_at: now };
+  return { id: info.lastInsertRowid, keyword, position, found_at: now, is_suspicious };
 }
 
 /**
@@ -201,6 +204,7 @@ function getAdsStats() {
   const totalClicked = db.prepare('SELECT COUNT(*) AS count FROM serp_ads WHERE was_clicked = 1').get().count;
   const totalWhitelisted = db.prepare('SELECT COUNT(*) AS count FROM serp_ads WHERE is_whitelisted = 1').get().count;
   const totalBlacklisted = db.prepare('SELECT COUNT(*) AS count FROM serp_ads WHERE is_blacklisted = 1').get().count;
+  const totalSuspicious = db.prepare('SELECT COUNT(*) AS count FROM serp_ads WHERE is_suspicious = 1').get().count;
   const totalSessions = db.prepare('SELECT COUNT(*) AS count FROM search_sessions').get().count;
   const totalSearches = db.prepare('SELECT COUNT(*) AS count FROM search_executions').get().count;
   const uniqueKeywords = db.prepare('SELECT COUNT(DISTINCT keyword) AS count FROM search_executions').get().count;
@@ -211,6 +215,7 @@ function getAdsStats() {
     totalClicked,
     totalWhitelisted,
     totalBlacklisted,
+    totalSuspicious,
     totalSessions,
     totalSearches,
     uniqueKeywords,
@@ -475,7 +480,7 @@ function buildAdHaystack({ href_raw, href_decoded, display_url, ad_title, ad_des
  * @param {string} domain - filtro opcional por domínio
  * @returns {{ads: Array, total: number}}
  */
-function getAllAds({ limit = 50, offset = 0, keyword, domain, is_blacklisted, is_whitelisted, orderBy = 'recent' } = {}) {
+function getAllAds({ limit = 50, offset = 0, keyword, domain, is_blacklisted, is_whitelisted, is_suspicious, orderBy = 'recent' } = {}) {
   const db = getAdsDB();
   let where = [];
   let params = [];
@@ -495,6 +500,10 @@ function getAllAds({ limit = 50, offset = 0, keyword, domain, is_blacklisted, is
   if (is_whitelisted !== undefined) {
     where.push('is_whitelisted = ?');
     params.push(is_whitelisted ? 1 : 0);
+  }
+  if (is_suspicious !== undefined) {
+    where.push('is_suspicious = ?');
+    params.push(is_suspicious ? 1 : 0);
   }
 
   const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
@@ -529,6 +538,7 @@ function getAllAds({ limit = 50, offset = 0, keyword, domain, is_blacklisted, is
       geo_city,
       MAX(is_whitelisted) AS is_whitelisted,
       MAX(is_blacklisted) AS is_blacklisted,
+      MAX(is_suspicious) AS is_suspicious,
       MAX(was_clicked) AS was_clicked,
       SUM(click_count) AS click_count,
       MIN(found_at) AS first_found_at,
