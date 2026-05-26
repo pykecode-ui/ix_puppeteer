@@ -237,8 +237,8 @@ function renderAdsTable() {
             }
           </td>
           <td>
-            <span class="device-badge ${(ad.device_type || 'desktop').toLowerCase()}">
-              ${(ad.device_type || 'desktop') === 'mobile' ? '📱 Mobile' : '💻 Desktop'}
+            <span class="device-badge ${(ad.device_type || 'desktop').toLowerCase()}" title="${(ad.device_type || 'desktop') === 'mobile' ? 'Mobile' : 'Desktop'}">
+              ${(ad.device_type || 'desktop') === 'mobile' ? '📱' : '💻'}
             </span>
             <span class="lang-badge" style="margin-left: 4px;">
               🌐 ${escapeHtmlAds(ad.browser_language || 'PT').toUpperCase()}
