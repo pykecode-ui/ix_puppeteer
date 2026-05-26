@@ -134,10 +134,17 @@ function initAdsDB() {
       was_clicked       INTEGER NOT NULL DEFAULT 0,
       click_count       INTEGER NOT NULL DEFAULT 0,
       found_at          TEXT    NOT NULL,
+      first_found_at    TEXT,
       FOREIGN KEY (whitelist_rule_id) REFERENCES whitelist_rules(id) ON DELETE SET NULL,
       FOREIGN KEY (blacklist_rule_id) REFERENCES blacklist_rules(id) ON DELETE SET NULL
     )
   `);
+
+  // Migration: adiciona first_found_at se não existir
+  try {
+    adsDb.exec(`ALTER TABLE serp_ads ADD COLUMN first_found_at TEXT`);
+    adsDb.exec(`UPDATE serp_ads SET first_found_at = found_at WHERE first_found_at IS NULL`);
+  } catch (_) {}
 
   // Migration: adiciona data_rw se não existir (para DBs criados antes)
   try {

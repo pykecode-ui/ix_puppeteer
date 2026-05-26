@@ -190,6 +190,7 @@ function renderAdsTable() {
         <th>País</th>
         <th>Estado / Cidade</th>
         <th style="text-align:center; width:60px;">Flags</th>
+        <th style="width:130px;">Primeira vez</th>
         <th style="width:130px;">Última vez</th>
         <th style="width:50px; text-align:center;">Ação</th>
       </tr>
@@ -263,6 +264,7 @@ function renderAdsTable() {
           <td>${ad.geo_country ? `<span class="geo-badge geo-country">🌍 ${escapeHtmlAds(ad.geo_country)}</span>` : '<span class="dim-text">—</span>'}</td>
           <td>${(ad.geo_region || ad.geo_city) ? `<span class="geo-badge geo-region">📍 ${escapeHtmlAds([ad.geo_region, ad.geo_city].filter(Boolean).join(' / '))}</span>` : '<span class="dim-text">—</span>'}</td>
           <td style="text-align:center;">${flagBadges(ad)}</td>
+          <td style="font-size:12px; color:var(--text-secondary);">${ad.first_found_at || ad.found_at || '—'}</td>
           <td style="font-size:12px; color:var(--text-secondary);">${ad.found_at || '—'}</td>
           <td style="text-align:center;">
             <div style="display:flex; gap:10px; justify-content:center; align-items:center;">

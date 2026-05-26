@@ -136,6 +136,16 @@ function createSerpAd({
 }) {
   const now = nowBrasilia();
   const is_suspicious = (ad_title && keyword && ad_title.toLowerCase().includes(keyword.toLowerCase())) ? 1 : 0;
+
+  // Busca o registro mais antigo com o mesmo display_url para preencher a primeira vez que foi visto
+  let first_found = now;
+  if (display_url) {
+    const prev = getAdsDB().prepare('SELECT MIN(found_at) AS first_seen FROM serp_ads WHERE display_url = ?').get(display_url);
+    if (prev && prev.first_seen) {
+      first_found = prev.first_seen;
+    }
+  }
+
   const info = getAdsDB().prepare(`
     INSERT INTO serp_ads (
       execution_id, session_id, keyword, position, slot_label, slot_index,
@@ -144,8 +154,8 @@ function createSerpAd({
       geo_country, geo_region, geo_city,
       is_whitelisted, is_blacklisted, whitelist_rule_id, blacklist_rule_id,
       is_suspicious,
-      found_at, all_titles
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      found_at, first_found_at, all_titles
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     execution_id, session_id, keyword,
     position || 'unknown', slot_label || null, slot_index || null,
@@ -157,6 +167,7 @@ function createSerpAd({
     whitelist_rule_id || null, blacklist_rule_id || null,
     is_suspicious,
     now,
+    first_found,
     ad_title || null
   );
   return { id: info.lastInsertRowid, keyword, position, found_at: now, is_suspicious };
@@ -568,7 +579,7 @@ function getAllAds({ limit = 50, offset = 0, keyword, domain, is_blacklisted, is
       MAX(is_suspicious) AS is_suspicious,
       MAX(was_clicked) AS was_clicked,
       SUM(click_count) AS click_count,
-      MIN(found_at) AS first_found_at,
+      MIN(COALESCE(first_found_at, found_at)) AS first_found_at,
       MAX(found_at) AS found_at,
       GROUP_CONCAT(id) AS all_ids,
       GROUP_CONCAT(ad_title, ' ||| ') AS all_titles
