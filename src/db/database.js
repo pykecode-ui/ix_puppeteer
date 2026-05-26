@@ -131,16 +131,18 @@ function initDatabase() {
   // ─── Tabela: perfis globais do IxBrowser cadastrados no dashboard ───────────
   db.exec(`
     CREATE TABLE IF NOT EXISTS ix_profiles (
-      id            INTEGER PRIMARY KEY AUTOINCREMENT,
-      profile_id    INTEGER NOT NULL UNIQUE,
-      name          TEXT,
-      notes         TEXT,
-      open_count    INTEGER NOT NULL DEFAULT 0,
-      last_opened_at TEXT,
-      loop_count    INTEGER NOT NULL DEFAULT 1,
-      infinite_loop INTEGER NOT NULL DEFAULT 0,
-      created_at    TEXT    NOT NULL,
-      updated_at    TEXT    NOT NULL
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      profile_id        INTEGER NOT NULL UNIQUE,
+      name              TEXT,
+      notes             TEXT,
+      open_count        INTEGER NOT NULL DEFAULT 0,
+      last_opened_at    TEXT,
+      loop_count        INTEGER NOT NULL DEFAULT 1,
+      infinite_loop     INTEGER NOT NULL DEFAULT 0,
+      device_type       TEXT    DEFAULT 'desktop',
+      browser_language  TEXT    DEFAULT 'PT',
+      created_at        TEXT    NOT NULL,
+      updated_at        TEXT    NOT NULL
     )
   `);
 
@@ -150,6 +152,8 @@ function initDatabase() {
   try { db.exec(`ALTER TABLE ix_profiles ADD COLUMN last_opened_at TEXT`); } catch (_) {}
   try { db.exec(`ALTER TABLE ix_profiles ADD COLUMN loop_count INTEGER NOT NULL DEFAULT 1`); } catch (_) {}
   try { db.exec(`ALTER TABLE ix_profiles ADD COLUMN infinite_loop INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
+  try { db.exec(`ALTER TABLE ix_profiles ADD COLUMN device_type TEXT DEFAULT 'desktop'`); } catch (_) {}
+  try { db.exec(`ALTER TABLE ix_profiles ADD COLUMN browser_language TEXT DEFAULT 'PT'`); } catch (_) {}
   try { db.exec(`ALTER TABLE bots ADD COLUMN run_state TEXT NOT NULL DEFAULT 'idle'`); } catch (_) {}
 
   // Migration: geolocalização do IP nos perfis (país, estado, cidade)

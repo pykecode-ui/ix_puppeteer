@@ -213,6 +213,19 @@
                   <input type="text" class="modal-input" id="pfSingleNotes" placeholder="Descrição do perfil" />
                 </div>
               </div>
+              <div class="profile-form-row" style="margin-top:12px; gap:16px; display:flex;">
+                <div class="profile-form-group" style="flex:1">
+                  <label class="form-label" for="pfSingleDevice">Dispositivo</label>
+                  <select class="modal-input" id="pfSingleDevice" style="background-color: var(--background-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 12px; height: 38px; width: 100%;">
+                    <option value="desktop" selected>💻 Desktop</option>
+                    <option value="mobile">📱 Mobile</option>
+                  </select>
+                </div>
+                <div class="profile-form-group" style="flex:1">
+                  <label class="form-label" for="pfSingleLang">Idioma do Navegador</label>
+                  <input type="text" class="modal-input" id="pfSingleLang" placeholder="Ex: PT, ENG" value="PT" />
+                </div>
+              </div>
               <button class="btn btn-primary" id="btnAddSingleProfile" style="margin-top:12px;">➕ Adicionar Perfil</button>
             </div>
 
@@ -228,6 +241,19 @@
                   style="resize:vertical; font-family: var(--font-mono); font-size:13px;"
                 ></textarea>
                 <div class="form-hint">💡 Exemplo: <code>376, 377, 378</code> ou um ID por linha.</div>
+              </div>
+              <div class="profile-form-row" style="margin-top:12px; gap:16px; display:flex;">
+                <div class="profile-form-group" style="flex:1">
+                  <label class="form-label" for="pfBulkDevice">Dispositivo Padrão</label>
+                  <select class="modal-input" id="pfBulkDevice" style="background-color: var(--background-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 12px; height: 38px; width: 100%;">
+                    <option value="desktop" selected>💻 Desktop</option>
+                    <option value="mobile">📱 Mobile</option>
+                  </select>
+                </div>
+                <div class="profile-form-group" style="flex:1">
+                  <label class="form-label" for="pfBulkLang">Idioma Padrão</label>
+                  <input type="text" class="modal-input" id="pfBulkLang" placeholder="Ex: PT, ENG" value="PT" />
+                </div>
               </div>
               <button class="btn btn-primary" id="btnAddBulkProfiles" style="margin-top:12px;">⚡ Adicionar em Massa</button>
             </div>
@@ -260,6 +286,8 @@
                     <th>ID do Perfil</th>
                     <th>Nome</th>
                     <th>Anotações</th>
+                    <th>Dispositivo</th>
+                    <th>Idioma</th>
                     <th>Cadastrado em</th>
                     <th>Bots Vinculados</th>
                     <th>Aberturas</th>

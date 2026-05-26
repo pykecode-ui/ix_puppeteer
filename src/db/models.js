@@ -426,17 +426,17 @@ function getIxProfile(profileId) {
  * @param {string} [notes] - Anotações opcionais
  * @returns {{ created: number, skipped: number }}
  */
-function createIxProfiles(profileIds, name = null, notes = null) {
+function createIxProfiles(profileIds, name = null, notes = null, deviceType = 'desktop', browserLanguage = 'PT') {
   const now = nowBrasilia();
   const stmt = getDB().prepare(`
-    INSERT OR IGNORE INTO ix_profiles (profile_id, name, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT OR IGNORE INTO ix_profiles (profile_id, name, notes, device_type, browser_language, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
   let created = 0;
   let skipped = 0;
   const multi = profileIds.length > 1;
   for (const pid of profileIds) {
-    const result = stmt.run(pid, multi ? null : name, multi ? null : notes, now, now);
+    const result = stmt.run(pid, multi ? null : name, multi ? null : notes, deviceType, browserLanguage, now, now);
     if (result.changes > 0) created++;
     else skipped++;
   }
@@ -444,16 +444,18 @@ function createIxProfiles(profileIds, name = null, notes = null) {
 }
 
 /**
- * Atualiza o nome e notas de um perfil global.
+ * Atualiza o nome, notas, tipo de dispositivo e idioma de um perfil global.
  * @param {number} profileId
  * @param {string|null} name
  * @param {string|null} notes
+ * @param {string} deviceType
+ * @param {string} browserLanguage
  */
-function updateIxProfile(profileId, name, notes) {
+function updateIxProfile(profileId, name, notes, deviceType = 'desktop', browserLanguage = 'PT') {
   const now = nowBrasilia();
   getDB()
-    .prepare('UPDATE ix_profiles SET name = ?, notes = ?, updated_at = ? WHERE profile_id = ?')
-    .run(name, notes, now, profileId);
+    .prepare('UPDATE ix_profiles SET name = ?, notes = ?, device_type = ?, browser_language = ?, updated_at = ? WHERE profile_id = ?')
+    .run(name, notes, deviceType, browserLanguage, now, profileId);
 }
 
 /**

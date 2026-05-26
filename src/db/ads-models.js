@@ -8,6 +8,7 @@
  */
 
 const { getAdsDB, nowBrasilia } = require('./ads-database');
+const { getDB } = require('./database');
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SEARCH SESSIONS
@@ -146,6 +147,24 @@ function createSerpAd({
     }
   }
 
+  // Descobre o device_type e browser_language baseado no profile_id associado à sessão de pesquisa
+  let device_type = 'desktop';
+  let browser_language = 'PT';
+  if (session_id) {
+    try {
+      const sess = getAdsDB().prepare('SELECT profile_id FROM search_sessions WHERE id = ?').get(session_id);
+      if (sess && sess.profile_id) {
+        const prof = getDB().prepare('SELECT device_type, browser_language FROM ix_profiles WHERE profile_id = ?').get(sess.profile_id);
+        if (prof) {
+          if (prof.device_type) device_type = prof.device_type;
+          if (prof.browser_language) browser_language = prof.browser_language;
+        }
+      }
+    } catch (err) {
+      console.error('[createSerpAd] Erro ao buscar dados do perfil da sessão:', err.message);
+    }
+  }
+
   const info = getAdsDB().prepare(`
     INSERT INTO serp_ads (
       execution_id, session_id, keyword, position, slot_label, slot_index,
@@ -154,8 +173,8 @@ function createSerpAd({
       geo_country, geo_region, geo_city,
       is_whitelisted, is_blacklisted, whitelist_rule_id, blacklist_rule_id,
       is_suspicious,
-      found_at, first_found_at, all_titles
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      found_at, first_found_at, device_type, browser_language, all_titles
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     execution_id, session_id, keyword,
     position || 'unknown', slot_label || null, slot_index || null,
@@ -168,6 +187,8 @@ function createSerpAd({
     is_suspicious,
     now,
     first_found,
+    device_type,
+    browser_language,
     ad_title || null
   );
   return { id: info.lastInsertRowid, keyword, position, found_at: now, is_suspicious };
@@ -581,6 +602,8 @@ function getAllAds({ limit = 50, offset = 0, keyword, domain, is_blacklisted, is
       SUM(click_count) AS click_count,
       MIN(COALESCE(first_found_at, found_at)) AS first_found_at,
       MAX(found_at) AS found_at,
+      MAX(device_type) AS device_type,
+      MAX(browser_language) AS browser_language,
       GROUP_CONCAT(id) AS all_ids,
       GROUP_CONCAT(ad_title, ' ||| ') AS all_titles
     FROM serp_ads ${whereClause}

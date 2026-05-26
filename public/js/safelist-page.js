@@ -168,6 +168,7 @@ function renderAdsTable() {
         <th>URL de Exibição</th>
         <th>data-pcu</th>
         <th>data-rw</th>
+        <th>Ambiente</th>
         <th>País</th>
         <th>Estado / Cidade</th>
         <th style="text-align:center; width:60px;">Flags</th>
@@ -232,6 +233,12 @@ function renderAdsTable() {
                  </div>`
               : '<span class="dim-text">—</span>'
             }
+          </td>
+          <td>
+            <span class="device-badge ${(ad.device_type || 'desktop').toLowerCase()}">
+              ${(ad.device_type || 'desktop') === 'mobile' ? '📱 Mobile' : '💻 Desktop'}
+            </span>
+            <div style="font-size: 10px; opacity: 0.7; margin-top: 3px;">🌐 ${escapeHtmlAds(ad.browser_language || 'PT').toUpperCase()}</div>
           </td>
           <td>${ad.geo_country ? `<span class="geo-badge geo-country">🌍 ${escapeHtmlAds(ad.geo_country)}</span>` : '<span class="dim-text">—</span>'}</td>
           <td>${(ad.geo_region || ad.geo_city) ? `<span class="geo-badge geo-region">📍 ${escapeHtmlAds([ad.geo_region, ad.geo_city].filter(Boolean).join(' / '))}</span>` : '<span class="dim-text">—</span>'}</td>

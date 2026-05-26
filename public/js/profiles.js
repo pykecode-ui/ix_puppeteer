@@ -141,6 +141,16 @@ function renderProfilesTable() {
           <td><span class="profile-id-badge">#${p.profile_id}</span></td>
           <td>${escapeHtml(p.name) || '<span class="dim-text">—</span>'}</td>
           <td>${escapeHtml(p.notes) || '<span class="dim-text">—</span>'}</td>
+          <td>
+            <span class="device-badge ${(p.device_type || 'desktop').toLowerCase()}">
+              ${(p.device_type || 'desktop') === 'mobile' ? '📱 Mobile' : '💻 Desktop'}
+            </span>
+          </td>
+          <td>
+            <span class="lang-badge">
+              🌐 ${escapeHtml(p.browser_language || 'PT').toUpperCase()}
+            </span>
+          </td>
           <td class="dim-text">${p.created_at || '—'}</td>
           <td><div class="bot-link-badges">${botBadges}</div></td>
           <td style="text-align:center;">${openBadge}</td>
@@ -178,17 +188,22 @@ function setupProfileForm() {
     const name = document.getElementById('pfSingleName').value.trim() || null;
     const notes = document.getElementById('pfSingleNotes').value.trim() || null;
 
+    const device_type = document.getElementById('pfSingleDevice').value;
+    const browser_language = document.getElementById('pfSingleLang').value.trim() || 'PT';
+
     if (!profileId || profileId <= 0) {
       showToastModerno('Digite um ID de perfil válido.', 'warning');
       return;
     }
 
-    await createProfiles([profileId], name, notes);
+    await createProfiles([profileId], name, notes, device_type, browser_language);
 
     // Limpa formulário
     document.getElementById('pfSingleId').value = '';
     document.getElementById('pfSingleName').value = '';
     document.getElementById('pfSingleNotes').value = '';
+    document.getElementById('pfSingleDevice').value = 'desktop';
+    document.getElementById('pfSingleLang').value = 'PT';
   });
 
   // Em massa
@@ -199,25 +214,30 @@ function setupProfileForm() {
       .map((s) => parseInt(s.trim()))
       .filter((n) => !isNaN(n) && n > 0);
 
+    const device_type = document.getElementById('pfBulkDevice').value;
+    const browser_language = document.getElementById('pfBulkLang').value.trim() || 'PT';
+
     if (ids.length === 0) {
       showToastModerno('Nenhum ID válido encontrado. Use vírgulas, espaços ou quebras de linha.', 'warning');
       return;
     }
 
-    await createProfiles(ids, null, null);
+    await createProfiles(ids, null, null, device_type, browser_language);
     document.getElementById('pfBulkIds').value = '';
+    document.getElementById('pfBulkDevice').value = 'desktop';
+    document.getElementById('pfBulkLang').value = 'PT';
   });
 
   // Botão de atualizar
   document.getElementById('btnRefreshProfiles')?.addEventListener('click', loadProfiles);
 }
 
-async function createProfiles(profileIds, name, notes) {
+async function createProfiles(profileIds, name, notes, device_type = 'desktop', browser_language = 'PT') {
   try {
     const res = await fetch('/api/profiles', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profileIds, name, notes }),
+      body: JSON.stringify({ profileIds, name, notes, device_type, browser_language }),
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error);
@@ -242,11 +262,27 @@ async function editProfilePrompt(profileId) {
   const notes = prompt('Anotações:', profile.notes || '');
   if (notes === null) return;
 
+  const devType = prompt('Dispositivo (desktop ou mobile):', profile.device_type || 'desktop');
+  if (devType === null) return;
+  const normalizedDev = devType.trim().toLowerCase();
+  if (normalizedDev !== 'desktop' && normalizedDev !== 'mobile') {
+    showToastModerno('Dispositivo inválido. Digite "desktop" ou "mobile".', 'warning');
+    return;
+  }
+
+  const lang = prompt('Idioma do navegador (ex: PT, ENG):', profile.browser_language || 'PT');
+  if (lang === null) return;
+
   try {
     const res = await fetch(`/api/profiles/${profileId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, notes }),
+      body: JSON.stringify({
+        name,
+        notes,
+        device_type: normalizedDev,
+        browser_language: lang.trim().toUpperCase()
+      }),
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error);

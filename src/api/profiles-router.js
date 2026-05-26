@@ -67,7 +67,7 @@ function createProfilesRouter(io) {
   // OU:   { profileId: 376, name?: string, notes?: string }
   router.post('/profiles', (req, res) => {
     try {
-      let { profileIds, profileId, name, notes } = req.body;
+      let { profileIds, profileId, name, notes, device_type, browser_language } = req.body;
 
       // Normaliza: aceita tanto profileId (singular) quanto profileIds (array)
       if (!profileIds && profileId) profileIds = [profileId];
@@ -84,7 +84,7 @@ function createProfilesRouter(io) {
         return res.status(400).json({ ok: false, error: 'Nenhum ID de perfil válido fornecido.' });
       }
 
-      const result = models.createIxProfiles(ids, name || null, notes || null);
+      const result = models.createIxProfiles(ids, name || null, notes || null, device_type || 'desktop', browser_language || 'PT');
 
       // Notifica o dashboard via Socket.io
       io.emit('profiles:updated', { profiles: models.getAllIxProfiles() });
@@ -131,12 +131,18 @@ function createProfilesRouter(io) {
   router.put('/profiles/:profileId', (req, res) => {
     try {
       const pid = parseInt(req.params.profileId);
-      const { name, notes } = req.body;
+      const { name, notes, device_type, browser_language } = req.body;
 
       const existing = models.getIxProfile(pid);
       if (!existing) return res.status(404).json({ ok: false, error: 'Perfil não encontrado.' });
 
-      models.updateIxProfile(pid, name !== undefined ? name : existing.name, notes !== undefined ? notes : existing.notes);
+      models.updateIxProfile(
+        pid,
+        name !== undefined ? name : existing.name,
+        notes !== undefined ? notes : existing.notes,
+        device_type !== undefined ? device_type : (existing.device_type || 'desktop'),
+        browser_language !== undefined ? browser_language : (existing.browser_language || 'PT')
+      );
 
       io.emit('profiles:updated', { profiles: models.getAllIxProfiles() });
       return res.json({ ok: true, message: 'Perfil atualizado.' });

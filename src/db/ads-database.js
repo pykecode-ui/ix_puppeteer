@@ -135,6 +135,8 @@ function initAdsDB() {
       click_count       INTEGER NOT NULL DEFAULT 0,
       found_at          TEXT    NOT NULL,
       first_found_at    TEXT,
+      device_type       TEXT    DEFAULT 'desktop',
+      browser_language  TEXT    DEFAULT 'PT',
       FOREIGN KEY (whitelist_rule_id) REFERENCES whitelist_rules(id) ON DELETE SET NULL,
       FOREIGN KEY (blacklist_rule_id) REFERENCES blacklist_rules(id) ON DELETE SET NULL
     )
@@ -145,6 +147,10 @@ function initAdsDB() {
     adsDb.exec(`ALTER TABLE serp_ads ADD COLUMN first_found_at TEXT`);
     adsDb.exec(`UPDATE serp_ads SET first_found_at = found_at WHERE first_found_at IS NULL`);
   } catch (_) {}
+
+  // Migration: adiciona device_type e browser_language se não existirem
+  try { adsDb.exec(`ALTER TABLE serp_ads ADD COLUMN device_type TEXT DEFAULT 'desktop'`); } catch (_) {}
+  try { adsDb.exec(`ALTER TABLE serp_ads ADD COLUMN browser_language TEXT DEFAULT 'PT'`); } catch (_) {}
 
   // Migration: adiciona data_rw se não existir (para DBs criados antes)
   try {
