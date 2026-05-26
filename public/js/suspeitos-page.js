@@ -387,23 +387,38 @@ function updatePagination() {
 function openAdTitlesModal(domain, titles) {
   const overlay = document.getElementById('adTitlesModalOverlay');
   const domainLabel = document.getElementById('adTitlesDomainLabel');
-  const listContainer = document.getElementById('adTitlesListContainer');
+  const container = document.getElementById('adTitlesListContainer');
+  if (!overlay || !domainLabel || !container) return;
 
-  if (!overlay || !listContainer) return;
-
-  if (domainLabel) domainLabel.textContent = domain;
-  listContainer.innerHTML = titles.map(title => `
-    <li style="padding: 10px 14px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; font-size:13px; color: var(--text-primary);">
-      ${escapeHtmlAds(title)}
+  domainLabel.textContent = domain;
+  container.innerHTML = titles.map(title => `
+    <li class="ad-title-item" style="padding:8px 12px; background:var(--background-secondary); border-radius:6px; border:1px solid var(--border-color); font-size:13px; color:var(--text-primary); word-break:break-word;">
+      ✨ ${escapeHtmlAds(title)}
     </li>
   `).join('');
 
-  overlay.classList.add('active');
+  overlay.classList.add('visible');
 }
 
-function closeAdTitlesModal() {
+function initAdTitlesModal() {
   const overlay = document.getElementById('adTitlesModalOverlay');
-  if (overlay) overlay.classList.remove('active');
+  const btnClose = document.getElementById('btnCloseAdTitles');
+  const btnCloseOk = document.getElementById('btnCloseAdTitlesOk');
+
+  if (!overlay) return;
+
+  function closeModal() {
+    overlay.classList.remove('visible');
+  }
+
+  btnClose?.addEventListener('click', closeModal);
+  btnCloseOk?.addEventListener('click', closeModal);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && overlay.classList.contains('visible')) closeModal();
+  });
 }
 
 // ── Bind de Eventos e Filtros ───────────────────────────────────────────────
@@ -431,17 +446,9 @@ document.getElementById('btnAdsNextPage')?.addEventListener('click', () => {
   }
 });
 
-// Modal Títulos
-document.getElementById('btnCloseAdTitles')?.addEventListener('click', closeAdTitlesModal);
-document.getElementById('btnCloseAdTitlesOk')?.addEventListener('click', closeAdTitlesModal);
-document.getElementById('adTitlesModalOverlay')?.addEventListener('click', (e) => {
-  if (e.target === e.currentTarget) closeAdTitlesModal();
-});
-
 // ── Real-time via Socket (CustomEvents repassados pelo socket.js) ───────────
 
 document.addEventListener('ads:new-ad', (e) => {
-  // Se o anúncio for suspeito, recarrega a lista
   const ad = e.detail;
   if (ad && ad.is_suspicious) {
     loadSuspiciousAds();
@@ -452,8 +459,17 @@ document.addEventListener('ads:updated', () => {
   loadSuspiciousAds();
 });
 
+document.addEventListener('ads:blacklist:updated', () => {
+  loadSuspiciousAds();
+});
+
+document.addEventListener('ads:whitelist:updated', () => {
+  loadSuspiciousAds();
+});
+
 // ── Inicialização ───────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
+  initAdTitlesModal();
   loadSuspiciousAds();
 });
