@@ -240,7 +240,9 @@ function renderAdsTable() {
             <span class="device-badge ${(ad.device_type || 'desktop').toLowerCase()}">
               ${(ad.device_type || 'desktop') === 'mobile' ? '📱 Mobile' : '💻 Desktop'}
             </span>
-            <div style="font-size: 10px; opacity: 0.7; margin-top: 3px;">🌐 ${escapeHtmlAds(ad.browser_language || 'PT').toUpperCase()}</div>
+            <span class="lang-badge" style="margin-left: 4px;">
+              🌐 ${escapeHtmlAds(ad.browser_language || 'PT').toUpperCase()}
+            </span>
           </td>
           <td>${ad.geo_country ? `<span class="geo-badge geo-country">🌍 ${escapeHtmlAds(ad.geo_country)}</span>` : '<span class="dim-text">—</span>'}</td>
           <td>${(ad.geo_region || ad.geo_city) ? `<span class="geo-badge geo-region">📍 ${escapeHtmlAds([ad.geo_region, ad.geo_city].filter(Boolean).join(' / '))}</span>` : '<span class="dim-text">—</span>'}</td>
