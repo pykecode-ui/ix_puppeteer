@@ -194,7 +194,7 @@ function createProfilesRouter(io) {
   router.put('/profiles/:profileId/click-config', (req, res) => {
     try {
       const pid = parseInt(req.params.profileId);
-      const { click_enabled, click_count, click_min_delay, click_max_delay } = req.body;
+      const { click_enabled, click_count, click_min_delay, click_max_delay, human_click } = req.body;
 
       const existing = models.getIxProfile(pid);
       if (!existing) return res.status(404).json({ ok: false, error: 'Perfil não encontrado.' });
@@ -203,6 +203,7 @@ function createProfilesRouter(io) {
       const cc = parseInt(click_count);
       const minDelay = click_min_delay !== undefined ? parseInt(click_min_delay) : 4;
       const maxDelay = click_max_delay !== undefined ? parseInt(click_max_delay) : 8;
+      const hc = human_click !== undefined ? parseInt(human_click) : 0;
 
       if (ce !== 0 && ce !== 1) {
         return res.status(400).json({ ok: false, error: 'click_enabled deve ser 0 ou 1.' });
@@ -216,8 +217,11 @@ function createProfilesRouter(io) {
       if (isNaN(maxDelay) || maxDelay < 1 || maxDelay < minDelay) {
         return res.status(400).json({ ok: false, error: 'click_max_delay deve ser um número inteiro maior ou igual ao tempo mínimo.' });
       }
+      if (hc !== 0 && hc !== 1) {
+        return res.status(400).json({ ok: false, error: 'human_click deve ser 0 ou 1.' });
+      }
 
-      models.updateIxProfileClickConfig(pid, ce, cc, minDelay, maxDelay);
+      models.updateIxProfileClickConfig(pid, ce, cc, minDelay, maxDelay, hc);
 
       // Notifica o dashboard em tempo real
       io.emit('profiles:updated', { profiles: models.getAllIxProfiles() });

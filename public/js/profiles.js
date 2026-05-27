@@ -1027,6 +1027,7 @@ function openClickConfigModal(profileId) {
   const countInput = document.getElementById('clickConfigCount');
   const minDelayInput = document.getElementById('clickConfigMinDelay');
   const maxDelayInput = document.getElementById('clickConfigMaxDelay');
+  const humanClickInput = document.getElementById('clickConfigHumanClick');
 
   if (!overlay) return;
 
@@ -1035,6 +1036,7 @@ function openClickConfigModal(profileId) {
 
   if (minDelayInput) minDelayInput.value = profile.click_min_delay !== undefined ? profile.click_min_delay : 4;
   if (maxDelayInput) maxDelayInput.value = profile.click_max_delay !== undefined ? profile.click_max_delay : 8;
+  if (humanClickInput) humanClickInput.checked = profile.human_click === 1;
 
   overlay.style.display = 'flex';
   setTimeout(() => overlay.classList.add('visible'), 10);
@@ -1057,6 +1059,7 @@ async function toggleClickConfig(profileId, isEnabled) {
   const clickCount = profile.click_count !== undefined ? profile.click_count : 3;
   const clickMinDelay = profile.click_min_delay !== undefined ? profile.click_min_delay : 4;
   const clickMaxDelay = profile.click_max_delay !== undefined ? profile.click_max_delay : 8;
+  const humanClick = profile.human_click !== undefined ? profile.human_click : 0;
 
   try {
     const res = await fetch(`/api/profiles/${profileId}/click-config`, {
@@ -1066,7 +1069,8 @@ async function toggleClickConfig(profileId, isEnabled) {
         click_enabled: isEnabled,
         click_count: clickCount,
         click_min_delay: clickMinDelay,
-        click_max_delay: clickMaxDelay
+        click_max_delay: clickMaxDelay,
+        human_click: humanClick
       }),
     });
     const data = await res.json();
@@ -1097,6 +1101,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const clickCount = parseInt(document.getElementById('clickConfigCount').value);
     const minDelay = parseInt(document.getElementById('clickConfigMinDelay').value);
     const maxDelay = parseInt(document.getElementById('clickConfigMaxDelay').value);
+    const humanClick = document.getElementById('clickConfigHumanClick')?.checked ? 1 : 0;
 
     if (isNaN(clickCount) || clickCount < 0) {
       showToastModerno('Por favor, insira um número válido de cliques (mínimo 0).', 'warning');
@@ -1127,7 +1132,8 @@ document.addEventListener('DOMContentLoaded', () => {
           click_enabled: clickEnabled,
           click_count: clickCount,
           click_min_delay: minDelay,
-          click_max_delay: maxDelay
+          click_max_delay: maxDelay,
+          human_click: humanClick
         }),
       });
       const data = await res.json();
