@@ -153,7 +153,7 @@ function createProfilesRouter(io) {
 
   // ─── PUT /api/profiles/:profileId/loop-config ──────────────────────────────
   // Atualiza as configurações de repetição (loop) e gerais de um perfil.
-  router.put('/api/profiles/:profileId/loop-config', (req, res) => {
+  router.put('/profiles/:profileId/loop-config', (req, res) => {
     try {
       const pid = parseInt(req.params.profileId);
       const { loop_count, infinite_loop, clean_cache, random_fp } = req.body;
