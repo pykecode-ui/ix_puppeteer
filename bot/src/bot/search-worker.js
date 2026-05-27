@@ -213,7 +213,7 @@ class SearchWorker {
    * @param {object} rules - { whitelist, blacklist }
    * @returns {Promise<object>} Resultado da execução
    */
-  async searchKeyword(page, keyword, rules, clickEnabled = 0, clickCountMax = 3) {
+  async searchKeyword(page, keyword, rules, clickEnabled = 0, clickCountMax = 3, clickMinDelay = 4, clickMaxDelay = 8) {
     const startTime = Date.now();
     const result = {
       keyword,
@@ -287,7 +287,7 @@ class SearchWorker {
             const targetAd = blacklistAds[targetIndex];
             
             this.log(`[SearchWorker] 🖱️ Efetuando clique (${clicksDone + 1}/${clickCountMax}) no anúncio da Blacklist: "${targetAd.adTitle}"`);
-            const clicked = await this.clickAdOnPage(page, targetAd);
+            const clicked = await this.clickAdOnPage(page, targetAd, clickMinDelay, clickMaxDelay);
             if (clicked) {
               clicksDone++;
               consecutiveFailures = 0; // reseta falhas em caso de sucesso
@@ -339,9 +339,9 @@ class SearchWorker {
 
   /**
    * Clica em um anúncio físico na página usando Puppeteer e abre em nova aba.
-   * Fecha a aba após a simulação de permanência (4-8 segundos).
+   * Fecha a aba após a simulação de permanência (customizável).
    */
-  async clickAdOnPage(page, ad) {
+  async clickAdOnPage(page, ad, clickMinDelay = 4, clickMaxDelay = 8) {
     try {
       const browser = page.browser();
       const containers = await page.$$('div[data-text-ad="1"]');
@@ -404,8 +404,8 @@ class SearchWorker {
             if (newPage) {
               this.log(`[SearchWorker] 🖱️ Clique efetuado. Aba aberta: ${newPage.url().slice(0, 80)}...`);
               
-              // Simula permanência (espera 4-8 segundos)
-              await humanSleep(4, 8);
+              // Simula permanência
+              await humanSleep(clickMinDelay, clickMaxDelay);
               
               // Fecha a aba
               await newPage.close();
@@ -461,19 +461,23 @@ class SearchWorker {
       }
       const { page } = session;
 
-      // 4. Busca configurações do perfil (click_enabled, click_count)
+      // 4. Busca configurações do perfil (click_enabled, click_count, delays)
       let clickEnabled = 0;
       let clickCountMax = 3;
+      let clickMinDelay = 4;
+      let clickMaxDelay = 8;
       try {
         const profRes = await this.http.get(`/api/profiles/${this.profileId}`);
         if (profRes.data?.ok && profRes.data.profile) {
           clickEnabled = profRes.data.profile.click_enabled || 0;
           clickCountMax = profRes.data.profile.click_count !== undefined ? profRes.data.profile.click_count : 3;
+          clickMinDelay = profRes.data.profile.click_min_delay !== undefined ? profRes.data.profile.click_min_delay : 4;
+          clickMaxDelay = profRes.data.profile.click_max_delay !== undefined ? profRes.data.profile.click_max_delay : 8;
         }
       } catch (err) {
         this.log(`[SearchWorker] ⚠️ Não foi possível obter configurações de cliques do perfil: ${err.message}`);
       }
-      this.log(`[SearchWorker] 🖱️ Cliques em Blacklist: ${clickEnabled === 1 ? 'ATIVADO' : 'DESATIVADO'} (máximo ${clickCountMax} por palavra)`);
+      this.log(`[SearchWorker] 🖱️ Cliques em Blacklist: ${clickEnabled === 1 ? 'ATIVADO' : 'DESATIVADO'} (máximo ${clickCountMax} por palavra, delay ${clickMinDelay}-${clickMaxDelay}s)`);
 
       // 5. Exibe saldo do 2Captcha (se configurado)
       if (this.captchaSolver.enabled) {
@@ -500,7 +504,7 @@ class SearchWorker {
           this.log(`\n[R${round}/${this.rounds} · ${i + 1}/${keywords.length}] 🔎 "${keyword}"`);
 
           // Pesquisa a keyword
-          const result = await this.searchKeyword(page, keyword, rules, clickEnabled, clickCountMax);
+          const result = await this.searchKeyword(page, keyword, rules, clickEnabled, clickCountMax, clickMinDelay, clickMaxDelay);
           summary.results.push(result);
           summary.keywordsDone++;
           summary.totalAdsFound += result.adsFound;

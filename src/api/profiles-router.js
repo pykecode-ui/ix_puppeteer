@@ -194,13 +194,15 @@ function createProfilesRouter(io) {
   router.put('/profiles/:profileId/click-config', (req, res) => {
     try {
       const pid = parseInt(req.params.profileId);
-      const { click_enabled, click_count } = req.body;
+      const { click_enabled, click_count, click_min_delay, click_max_delay } = req.body;
 
       const existing = models.getIxProfile(pid);
       if (!existing) return res.status(404).json({ ok: false, error: 'Perfil não encontrado.' });
 
       const ce = parseInt(click_enabled);
       const cc = parseInt(click_count);
+      const minDelay = click_min_delay !== undefined ? parseInt(click_min_delay) : 4;
+      const maxDelay = click_max_delay !== undefined ? parseInt(click_max_delay) : 8;
 
       if (ce !== 0 && ce !== 1) {
         return res.status(400).json({ ok: false, error: 'click_enabled deve ser 0 ou 1.' });
@@ -208,8 +210,14 @@ function createProfilesRouter(io) {
       if (isNaN(cc) || cc < 0) {
         return res.status(400).json({ ok: false, error: 'click_count deve ser um número inteiro maior ou igual a 0.' });
       }
+      if (isNaN(minDelay) || minDelay < 1) {
+        return res.status(400).json({ ok: false, error: 'click_min_delay deve ser um número inteiro maior ou igual a 1.' });
+      }
+      if (isNaN(maxDelay) || maxDelay < 1 || maxDelay < minDelay) {
+        return res.status(400).json({ ok: false, error: 'click_max_delay deve ser um número inteiro maior ou igual ao tempo mínimo.' });
+      }
 
-      models.updateIxProfileClickConfig(pid, ce, cc);
+      models.updateIxProfileClickConfig(pid, ce, cc, minDelay, maxDelay);
 
       // Notifica o dashboard em tempo real
       io.emit('profiles:updated', { profiles: models.getAllIxProfiles() });

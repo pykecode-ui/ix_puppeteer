@@ -478,12 +478,14 @@ function updateIxProfileLoopConfig(profileId, loopCount, infiniteLoop, cleanCach
  * @param {number} profileId
  * @param {number} clickEnabled
  * @param {number} clickCount
+ * @param {number} clickMinDelay
+ * @param {number} clickMaxDelay
  */
-function updateIxProfileClickConfig(profileId, clickEnabled, clickCount) {
+function updateIxProfileClickConfig(profileId, clickEnabled, clickCount, clickMinDelay = 4, clickMaxDelay = 8) {
   const now = nowBrasilia();
   getDB()
-    .prepare('UPDATE ix_profiles SET click_enabled = ?, click_count = ?, updated_at = ? WHERE profile_id = ?')
-    .run(clickEnabled, clickCount, now, profileId);
+    .prepare('UPDATE ix_profiles SET click_enabled = ?, click_count = ?, click_min_delay = ?, click_max_delay = ?, updated_at = ? WHERE profile_id = ?')
+    .run(clickEnabled, clickCount, clickMinDelay, clickMaxDelay, now, profileId);
 }
 
 /**

@@ -1025,11 +1025,16 @@ function openClickConfigModal(profileId) {
   const overlay = document.getElementById('clickConfigOverlay');
   const label = document.getElementById('clickConfigProfileLabel');
   const countInput = document.getElementById('clickConfigCount');
+  const minDelayInput = document.getElementById('clickConfigMinDelay');
+  const maxDelayInput = document.getElementById('clickConfigMaxDelay');
 
   if (!overlay) return;
 
   label.textContent = `#${profileId} (${profile.name || 'Sem Nome'})`;
   countInput.value = profile.click_count !== undefined ? profile.click_count : 3;
+
+  if (minDelayInput) minDelayInput.value = profile.click_min_delay !== undefined ? profile.click_min_delay : 4;
+  if (maxDelayInput) maxDelayInput.value = profile.click_max_delay !== undefined ? profile.click_max_delay : 8;
 
   overlay.style.display = 'flex';
   setTimeout(() => overlay.classList.add('visible'), 10);
@@ -1050,6 +1055,8 @@ async function toggleClickConfig(profileId, isEnabled) {
   const profile = profilesState.profiles.find((p) => p.profile_id === profileId);
   if (!profile) return;
   const clickCount = profile.click_count !== undefined ? profile.click_count : 3;
+  const clickMinDelay = profile.click_min_delay !== undefined ? profile.click_min_delay : 4;
+  const clickMaxDelay = profile.click_max_delay !== undefined ? profile.click_max_delay : 8;
 
   try {
     const res = await fetch(`/api/profiles/${profileId}/click-config`, {
@@ -1057,7 +1064,9 @@ async function toggleClickConfig(profileId, isEnabled) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         click_enabled: isEnabled,
-        click_count: clickCount
+        click_count: clickCount,
+        click_min_delay: clickMinDelay,
+        click_max_delay: clickMaxDelay
       }),
     });
     const data = await res.json();
@@ -1086,9 +1095,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!profileId) return;
 
     const clickCount = parseInt(document.getElementById('clickConfigCount').value);
+    const minDelay = parseInt(document.getElementById('clickConfigMinDelay').value);
+    const maxDelay = parseInt(document.getElementById('clickConfigMaxDelay').value);
 
     if (isNaN(clickCount) || clickCount < 0) {
       showToastModerno('Por favor, insira um número válido de cliques (mínimo 0).', 'warning');
+      return;
+    }
+    if (isNaN(minDelay) || minDelay < 1) {
+      showToastModerno('Por favor, insira um tempo mínimo de permanência válido (mínimo 1s).', 'warning');
+      return;
+    }
+    if (isNaN(maxDelay) || maxDelay < 1 || maxDelay < minDelay) {
+      showToastModerno('O tempo máximo de permanência deve ser maior ou igual ao tempo mínimo.', 'warning');
       return;
     }
 
@@ -1106,7 +1125,9 @@ document.addEventListener('DOMContentLoaded', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           click_enabled: clickEnabled,
-          click_count: clickCount
+          click_count: clickCount,
+          click_min_delay: minDelay,
+          click_max_delay: maxDelay
         }),
       });
       const data = await res.json();

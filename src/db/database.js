@@ -143,6 +143,8 @@ function initDatabase() {
       browser_language  TEXT    DEFAULT 'PT',
       click_enabled     INTEGER NOT NULL DEFAULT 0,
       click_count       INTEGER NOT NULL DEFAULT 3,
+      click_min_delay   INTEGER NOT NULL DEFAULT 4,
+      click_max_delay   INTEGER NOT NULL DEFAULT 8,
       clean_cache       INTEGER NOT NULL DEFAULT 0,
       random_fp         INTEGER NOT NULL DEFAULT 0,
       created_at        TEXT    NOT NULL,
@@ -160,6 +162,8 @@ function initDatabase() {
   try { db.exec(`ALTER TABLE ix_profiles ADD COLUMN browser_language TEXT DEFAULT 'PT'`); } catch (_) {}
   try { db.exec(`ALTER TABLE ix_profiles ADD COLUMN click_enabled INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
   try { db.exec(`ALTER TABLE ix_profiles ADD COLUMN click_count INTEGER NOT NULL DEFAULT 3`); } catch (_) {}
+  try { db.exec(`ALTER TABLE ix_profiles ADD COLUMN click_min_delay INTEGER NOT NULL DEFAULT 4`); } catch (_) {}
+  try { db.exec(`ALTER TABLE ix_profiles ADD COLUMN click_max_delay INTEGER NOT NULL DEFAULT 8`); } catch (_) {}
   try { db.exec(`ALTER TABLE ix_profiles ADD COLUMN clean_cache INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
   try { db.exec(`ALTER TABLE ix_profiles ADD COLUMN random_fp INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
   try { db.exec(`ALTER TABLE bots ADD COLUMN run_state TEXT NOT NULL DEFAULT 'idle'`); } catch (_) {}

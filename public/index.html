@@ -877,11 +877,23 @@
           Configure a quantidade máxima de cliques por palavra-chave para o perfil <strong id="clickConfigProfileLabel"></strong>. O robô irá clicar apenas em anúncios classificados como Blacklist.
         </p>
         
-        <div class="profile-form-group" id="clickConfigCountGroup">
+        <div class="profile-form-group" id="clickConfigCountGroup" style="margin-bottom:16px;">
           <label class="form-label" for="clickConfigCount">Quantidade Máxima de Cliques *</label>
           <input type="number" class="modal-input" id="clickConfigCount" min="0" value="3" placeholder="Ex: 3" style="width:100%; box-sizing:border-box;" />
           <div class="form-hint" style="margin-top:6px;">Insira a quantidade de cliques em anúncios da Blacklist permitida por palavra-chave (0 para desativar).</div>
         </div>
+
+        <div style="display:flex; gap:16px; margin-bottom:16px;">
+          <div class="profile-form-group" style="flex:1;">
+            <label class="form-label" for="clickConfigMinDelay">Permanência Mínima (s) *</label>
+            <input type="number" class="modal-input" id="clickConfigMinDelay" min="1" value="4" placeholder="Ex: 4" style="width:100%; box-sizing:border-box;" />
+          </div>
+          <div class="profile-form-group" style="flex:1;">
+            <label class="form-label" for="clickConfigMaxDelay">Permanência Máxima (s) *</label>
+            <input type="number" class="modal-input" id="clickConfigMaxDelay" min="1" value="8" placeholder="Ex: 8" style="width:100%; box-sizing:border-box;" />
+          </div>
+        </div>
+        <div class="form-hint" style="margin-top:-8px; margin-bottom:16px;">O robô irá aguardar um tempo aleatório entre o mínimo e o máximo em segundos na página do anúncio.</div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px;">
         <button class="btn btn-secondary" id="clickConfigCancel" style="width: auto;">Cancelar</button>
