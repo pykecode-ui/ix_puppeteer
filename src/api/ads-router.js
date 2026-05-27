@@ -151,6 +151,8 @@ function createAdsRouter(io) {
         is_blacklisted: req.body.isBlacklisted || req.body.is_blacklisted || false,
         whitelist_rule_id: req.body.whitelistRuleId || req.body.whitelist_rule_id,
         blacklist_rule_id: req.body.blacklistRuleId || req.body.blacklist_rule_id,
+        click_count: req.body.click_count || req.body.clickCount || 0,
+        was_clicked: req.body.was_clicked || req.body.wasClicked || 0,
       });
       if (io) io.emit('ads:new-ad', ad);
       res.json({ ok: true, ad });

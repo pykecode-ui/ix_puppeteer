@@ -134,6 +134,7 @@ function createSerpAd({
   data_pcu, data_rw, data_ta_slot, data_ta_slot_pos,
   geo_country, geo_region, geo_city,
   is_whitelisted, is_blacklisted, whitelist_rule_id, blacklist_rule_id,
+  click_count, was_clicked,
 }) {
   const now = nowBrasilia();
   const is_suspicious = (ad_title && keyword && ad_title.toLowerCase().includes(keyword.toLowerCase())) ? 1 : 0;
@@ -172,9 +173,9 @@ function createSerpAd({
       data_pcu, data_rw, data_ta_slot, data_ta_slot_pos,
       geo_country, geo_region, geo_city,
       is_whitelisted, is_blacklisted, whitelist_rule_id, blacklist_rule_id,
-      is_suspicious,
+      is_suspicious, was_clicked, click_count,
       found_at, first_found_at, device_type, browser_language, all_titles
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     execution_id, session_id, keyword,
     position || 'unknown', slot_label || null, slot_index || null,
@@ -185,6 +186,8 @@ function createSerpAd({
     is_whitelisted ? 1 : 0, is_blacklisted ? 1 : 0,
     whitelist_rule_id || null, blacklist_rule_id || null,
     is_suspicious,
+    was_clicked ? 1 : 0,
+    click_count || 0,
     now,
     first_found,
     device_type,

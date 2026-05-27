@@ -162,6 +162,7 @@ function renderAdsTable() {
       <tr>
         <th style="text-align:center; width:55px;">Vezes</th>
         <th style="text-align:center; width:70px;">Posição</th>
+        <th style="text-align:center; width:65px;">Clicks</th>
         <th>Keywords</th>
         <th>Título do Anúncio</th>
         <th>URL de Exibição</th>
@@ -201,6 +202,9 @@ function renderAdsTable() {
             <span class="ad-rep-badge ${repClass}">${reps}x</span>
           </td>
           <td style="text-align:center;">${positionBadge(ad.position)}</td>
+          <td style="text-align:center;">
+            <span class="click-count-badge ${ad.click_count > 0 ? 'clicked' : 'not-clicked'}" style="display:inline-block; padding:3px 8px; border-radius:4px; font-size:11px; font-weight:600; background:${ad.click_count > 0 ? 'var(--blue-soft)' : 'rgba(255,255,255,0.03)'}; color:${ad.click_count > 0 ? 'var(--blue)' : 'var(--text-muted)'}; border:1px solid ${ad.click_count > 0 ? 'rgba(59,130,246,0.3)' : 'var(--border)'};">${ad.click_count || 0}</span>
+          </td>
           <td>
             <div class="ad-keywords-wrap">${kwChips}</div>
           </td>

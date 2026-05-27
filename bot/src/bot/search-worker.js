@@ -291,6 +291,11 @@ class SearchWorker {
             if (clicked) {
               clicksDone++;
               consecutiveFailures = 0; // reseta falhas em caso de sucesso
+              
+              // Salva de forma acumulativa os cliques realizados no anúncio
+              targetAd.click_count = (targetAd.click_count || 0) + 1;
+              targetAd.was_clicked = 1;
+
               if (clicksDone < clickCountMax) {
                 await humanSleep(2, 4); // pausa entre cliques
               }
