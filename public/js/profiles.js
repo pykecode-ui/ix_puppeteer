@@ -478,6 +478,7 @@ async function renderModalAssignments() {
           </th>
           <th>ID</th>
           <th style="text-align:center;">Status</th>
+          <th style="text-align:center;">Click</th>
           <th>Nome</th>
           <th style="text-align:center;">Módulo</th>
           <th>País</th>
@@ -496,6 +497,13 @@ async function renderModalAssignments() {
           const statusBadge = bpInfo.status === 'open' 
             ? `<span style="color:var(--green);font-weight:600;font-size:12px;" title="Aberto em: ${bpInfo.last_opened_at || '—'}">🟢 Aberto</span>`
             : `<span style="color:var(--red);font-weight:600;font-size:12px;" title="Fechado em: ${bpInfo.last_closed_at || '—'}">🔴 Fechado</span>`;
+
+          const clickEnabled = p.click_enabled || 0;
+          const clickCount = p.click_count !== undefined ? p.click_count : 3;
+
+          const clickBadge = clickEnabled === 1
+            ? `<span class="click-status-badge on" onclick="toggleClickConfig(${p.profile_id}, 0)" title="Clique para desativar os cliques">ON</span>`
+            : `<span class="click-status-badge off" onclick="toggleClickConfig(${p.profile_id}, 1)" title="Clique para ativar os cliques">OFF</span>`;
 
           const openCount = p.open_count || 0;
           const openBadge = openCount > 0
@@ -530,6 +538,12 @@ async function renderModalAssignments() {
             </td>
             <td><span class="profile-id-badge">#${p.profile_id}</span></td>
             <td style="text-align:center;">${statusBadge}</td>
+            <td style="text-align:center;">
+              <div style="display:inline-flex; align-items:center; gap:6px;">
+                ${clickBadge}
+                <button class="module-link-btn" onclick="openClickConfigModal(${p.profile_id})" title="Configurar cliques" style="padding:0; background:none; border:none; cursor:pointer;">⚙️</button>
+              </div>
+            </td>
             <td>${escapeHtml(p.name) || '<span class="dim-text">—</span>'}</td>
             <td style="text-align:center;">
               <div class="module-link-cell">
@@ -989,6 +1003,118 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+// ── Modal de Configuração de Cliques (Blacklist) ──────────────────────────────
+let _clickConfigTargetProfileId = null;
+
+function openClickConfigModal(profileId) {
+  _clickConfigTargetProfileId = profileId;
+  const profile = profilesState.profiles.find((p) => p.profile_id === profileId);
+  if (!profile) return;
+
+  const overlay = document.getElementById('clickConfigOverlay');
+  const label = document.getElementById('clickConfigProfileLabel');
+  const countInput = document.getElementById('clickConfigCount');
+
+  if (!overlay) return;
+
+  label.textContent = `#${profileId} (${profile.name || 'Sem Nome'})`;
+  countInput.value = profile.click_count !== undefined ? profile.click_count : 3;
+
+  overlay.style.display = 'flex';
+  setTimeout(() => overlay.classList.add('visible'), 10);
+}
+
+function closeClickConfigModal() {
+  _clickConfigTargetProfileId = null;
+  const overlay = document.getElementById('clickConfigOverlay');
+  if (overlay) {
+    overlay.classList.remove('visible');
+    setTimeout(() => {
+      overlay.style.display = 'none';
+    }, 300);
+  }
+}
+
+async function toggleClickConfig(profileId, isEnabled) {
+  const profile = profilesState.profiles.find((p) => p.profile_id === profileId);
+  if (!profile) return;
+  const clickCount = profile.click_count !== undefined ? profile.click_count : 3;
+
+  try {
+    const res = await fetch(`/api/profiles/${profileId}/click-config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        click_enabled: isEnabled,
+        click_count: clickCount
+      }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+
+    if (typeof showToast === 'function') {
+      showToast('online', `🖱️ Cliques ${isEnabled ? 'ativados' : 'desativados'} para o perfil #${profileId}!`, null);
+    }
+    await loadProfiles();
+  } catch (err) {
+    showToastModerno(`Erro ao atualizar configuração de cliques: ${err.message}`, 'error');
+  }
+}
+
+// Setup Event Listeners para o Modal de Configuração de Cliques
+document.addEventListener('DOMContentLoaded', () => {
+  const clickOverlay = document.getElementById('clickConfigOverlay');
+  document.getElementById('clickConfigClose')?.addEventListener('click', closeClickConfigModal);
+  document.getElementById('clickConfigCancel')?.addEventListener('click', closeClickConfigModal);
+  clickOverlay?.addEventListener('click', (e) => {
+    if (e.target === clickOverlay) closeClickConfigModal();
+  });
+
+  document.getElementById('clickConfigSave')?.addEventListener('click', async () => {
+    const profileId = _clickConfigTargetProfileId;
+    if (!profileId) return;
+
+    const clickCount = parseInt(document.getElementById('clickConfigCount').value);
+
+    if (isNaN(clickCount) || clickCount < 0) {
+      showToastModerno('Por favor, insira um número válido de cliques (mínimo 0).', 'warning');
+      return;
+    }
+
+    const btn = document.getElementById('clickConfigSave');
+    btn.disabled = true;
+    btn.textContent = 'Salvando...';
+
+    // Obtém o estado atual de click_enabled
+    const profile = profilesState.profiles.find((p) => p.profile_id === profileId);
+    const clickEnabled = profile ? (profile.click_enabled || 0) : 0;
+
+    try {
+      const res = await fetch(`/api/profiles/${profileId}/click-config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          click_enabled: clickEnabled,
+          click_count: clickCount
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error);
+
+      if (typeof showToast === 'function') {
+        showToast('online', `⚙️ Configuração de cliques salva para o perfil #${profileId}!`, null);
+      }
+      closeClickConfigModal();
+      await loadProfiles();
+    } catch (err) {
+      showToastModerno(`Erro ao salvar configurações de cliques: ${err.message}`, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '💾 Salvar Configurações';
+    }
+  });
+});
+
 // Expõe funções globais usadas no onclick inline da tabela
 window.editProfilePrompt = editProfilePrompt;
 window.deleteProfile = deleteProfile;
@@ -999,3 +1125,6 @@ window.selectModuleForProfile = selectModuleForProfile;
 window.unlinkModule = unlinkModule;
 window.openLoopConfigModal = openLoopConfigModal;
 window.closeLoopConfigModal = closeLoopConfigModal;
+window.openClickConfigModal = openClickConfigModal;
+window.closeClickConfigModal = closeClickConfigModal;
+window.toggleClickConfig = toggleClickConfig;

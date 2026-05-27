@@ -472,6 +472,19 @@ function updateIxProfileLoopConfig(profileId, loopCount, infiniteLoop) {
 }
 
 /**
+ * Atualiza as configurações de cliques de um perfil global.
+ * @param {number} profileId
+ * @param {number} clickEnabled
+ * @param {number} clickCount
+ */
+function updateIxProfileClickConfig(profileId, clickEnabled, clickCount) {
+  const now = nowBrasilia();
+  getDB()
+    .prepare('UPDATE ix_profiles SET click_enabled = ?, click_count = ?, updated_at = ? WHERE profile_id = ?')
+    .run(clickEnabled, clickCount, now, profileId);
+}
+
+/**
  * Remove um perfil global do cadastro (e suas atribuições em cascade).
  * @param {number} profileId
  */
@@ -755,6 +768,7 @@ module.exports = {
   deleteIxProfile,
   incrementIxProfileOpenCount,
   updateIxProfileLoopConfig,
+  updateIxProfileClickConfig,
   // Bot profile assignments
   getBotProfileAssignments,
   setBotProfileAssignments,

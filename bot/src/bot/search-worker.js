@@ -213,7 +213,7 @@ class SearchWorker {
    * @param {object} rules - { whitelist, blacklist }
    * @returns {Promise<object>} Resultado da execução
    */
-  async searchKeyword(page, keyword, rules) {
+  async searchKeyword(page, keyword, rules, clickEnabled = 0, clickCountMax = 3) {
     const startTime = Date.now();
     const result = {
       keyword,
@@ -273,6 +273,55 @@ class SearchWorker {
       }
 
       result.status = 'completed';
+
+      // Realiza cliques em anúncios da Blacklist se habilitado
+      if (clickEnabled === 1) {
+        const blacklistAds = result.ads.filter(ad => ad.isBlacklisted);
+        if (blacklistAds.length > 0) {
+          let clicksDone = 0;
+          let consecutiveFailures = 0;
+          this.log(`[SearchWorker] 🖱️ Detectados ${blacklistAds.length} anúncio(s) na Blacklist. Iniciando rotina de cliques (limite: ${clickCountMax})...`);
+          
+          while (clicksDone < clickCountMax && consecutiveFailures < 3) {
+            const targetIndex = clicksDone % blacklistAds.length;
+            const targetAd = blacklistAds[targetIndex];
+            
+            this.log(`[SearchWorker] 🖱️ Efetuando clique (${clicksDone + 1}/${clickCountMax}) no anúncio da Blacklist: "${targetAd.adTitle}"`);
+            const clicked = await this.clickAdOnPage(page, targetAd);
+            if (clicked) {
+              clicksDone++;
+              consecutiveFailures = 0; // reseta falhas em caso de sucesso
+              if (clicksDone < clickCountMax) {
+                await humanSleep(2, 4); // pausa entre cliques
+              }
+            } else {
+              consecutiveFailures++;
+              this.log(`[SearchWorker] ⚠️ Falha ao efetuar clique (${consecutiveFailures}/3 falhas consecutivas).`);
+              if (consecutiveFailures < 3) {
+                await humanSleep(1, 2);
+              }
+            }
+          }
+
+          if (consecutiveFailures >= 3) {
+            this.log(`[SearchWorker] 🛑 Interrompendo rotina de cliques após 3 falhas consecutivas.`);
+          }
+
+          // Fecha todas as abas extras residuais após a rotina de cliques desta keyword terminar
+          try {
+            const browser = page.browser();
+            const pages = await browser.pages();
+            for (const p of pages) {
+              if (p !== page) {
+                this.log(`[SearchWorker] 🔒 Fechando aba extra residual: ${p.url().slice(0, 50)}...`);
+                await p.close().catch(() => {});
+              }
+            }
+          } catch (closeErr) {
+            this.log(`[SearchWorker] ⚠️ Erro ao fechar abas residuais: ${closeErr.message}`);
+          }
+        }
+      }
     } catch (err) {
       result.status = 'error';
       result.errorMessage = err.message;
@@ -281,6 +330,92 @@ class SearchWorker {
 
     result.durationMs = Date.now() - startTime;
     return result;
+  }
+
+  /**
+   * Clica em um anúncio físico na página usando Puppeteer e abre em nova aba.
+   * Fecha a aba após a simulação de permanência (4-8 segundos).
+   */
+  async clickAdOnPage(page, ad) {
+    try {
+      const browser = page.browser();
+      const containers = await page.$$('div[data-text-ad="1"]');
+      for (const container of containers) {
+        // Extrai dados do contêiner atual no DOM
+        const adInfo = await container.evaluate(el => {
+          const a = el.querySelector('a[data-pcu]') || el.querySelector('a[href]');
+          if (!a) return null;
+          const hrefRaw = a.getAttribute('href');
+          const dataPcu = a.getAttribute('data-pcu');
+          
+          const cite = el.querySelector('cite');
+          const displayUrl = cite ? cite.innerText : '';
+          
+          const h3 = el.querySelector('h3') || el.querySelector('[role="heading"]');
+          const adTitle = h3 ? h3.innerText : '';
+          
+          return { hrefRaw, displayUrl, adTitle, dataPcu };
+        });
+
+        if (!adInfo) continue;
+
+        // Compara de forma tolerante se este contêiner no DOM é o mesmo anúncio 'ad' alvo:
+        // 1. Pelo hrefRaw original
+        // 2. Ou pelo displayUrl (domínio de exibição) se ambos possuírem
+        // 3. Ou pelo título do anúncio (ignorando caixa alta/baixa e espaços extras)
+        // 4. Ou pelo data-pcu original
+        const isMatch = adInfo.hrefRaw === ad.hrefRaw ||
+          (adInfo.displayUrl && ad.displayUrl && adInfo.displayUrl.toLowerCase().includes(ad.displayUrl.toLowerCase())) ||
+          (adInfo.adTitle && ad.adTitle && adInfo.adTitle.toLowerCase().trim() === ad.adTitle.toLowerCase().trim()) ||
+          (adInfo.dataPcu && ad.dataPcu && adInfo.dataPcu === ad.dataPcu);
+
+        if (isMatch) {
+          const linkEl = await container.$('a[data-pcu]') || await container.$('a[href]');
+          if (linkEl) {
+            // Prepara a promessa para capturar a nova aba
+            const newPagePromise = new Promise(resolve => {
+              const listener = async (target) => {
+                if (target.type() === 'page') {
+                  const p = await target.page();
+                  browser.off('targetcreated', listener);
+                  resolve(p);
+                }
+              };
+              browser.on('targetcreated', listener);
+              setTimeout(() => {
+                browser.off('targetcreated', listener);
+                resolve(null);
+              }, 12000);
+            });
+
+            // Força abrir em nova aba alterando o target
+            await linkEl.evaluate(a => a.setAttribute('target', '_blank'));
+            
+            // Clica
+            await linkEl.click();
+
+            // Espera a aba abrir
+            const newPage = await newPagePromise;
+            if (newPage) {
+              this.log(`[SearchWorker] 🖱️ Clique efetuado. Aba aberta: ${newPage.url().slice(0, 80)}...`);
+              
+              // Simula permanência (espera 4-8 segundos)
+              await humanSleep(4, 8);
+              
+              // Fecha a aba
+              await newPage.close();
+              this.log(`[SearchWorker] 🔒 Aba do anúncio fechada.`);
+              return true;
+            } else {
+              this.log(`[SearchWorker] ⚠️ Clique efetuado, mas a nova aba não foi detectada.`);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      this.log(`[SearchWorker] ❌ Erro ao clicar no anúncio: ${err.message}`);
+    }
+    return false;
   }
 
   /**
@@ -321,7 +456,21 @@ class SearchWorker {
       }
       const { page } = session;
 
-      // 4. Exibe saldo do 2Captcha (se configurado)
+      // 4. Busca configurações do perfil (click_enabled, click_count)
+      let clickEnabled = 0;
+      let clickCountMax = 3;
+      try {
+        const profRes = await this.http.get(`/api/profiles/${this.profileId}`);
+        if (profRes.data?.ok && profRes.data.profile) {
+          clickEnabled = profRes.data.profile.click_enabled || 0;
+          clickCountMax = profRes.data.profile.click_count !== undefined ? profRes.data.profile.click_count : 3;
+        }
+      } catch (err) {
+        this.log(`[SearchWorker] ⚠️ Não foi possível obter configurações de cliques do perfil: ${err.message}`);
+      }
+      this.log(`[SearchWorker] 🖱️ Cliques em Blacklist: ${clickEnabled === 1 ? 'ATIVADO' : 'DESATIVADO'} (máximo ${clickCountMax} por palavra)`);
+
+      // 5. Exibe saldo do 2Captcha (se configurado)
       if (this.captchaSolver.enabled) {
         const balance = await this.captchaSolver.getBalance();
         if (balance !== null) {
@@ -333,7 +482,7 @@ class SearchWorker {
         this.log('[Captcha] ℹ️ 2Captcha não configurado — CAPTCHAs serão detectados mas não resolvidos');
       }
 
-      // 5. Loop de rodadas × keywords
+      // 6. Loop de rodadas × keywords
       for (let round = 1; round <= this.rounds; round++) {
         if (this._cancelled) break;
 
@@ -346,7 +495,7 @@ class SearchWorker {
           this.log(`\n[R${round}/${this.rounds} · ${i + 1}/${keywords.length}] 🔎 "${keyword}"`);
 
           // Pesquisa a keyword
-          const result = await this.searchKeyword(page, keyword, rules);
+          const result = await this.searchKeyword(page, keyword, rules, clickEnabled, clickCountMax);
           summary.results.push(result);
           summary.keywordsDone++;
           summary.totalAdsFound += result.adsFound;

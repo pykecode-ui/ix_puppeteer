@@ -181,6 +181,36 @@ function createProfilesRouter(io) {
     }
   });
 
+  // ─── PUT /api/profiles/:profileId/click-config ─────────────────────────────
+  // Atualiza as configurações de cliques de um perfil.
+  router.put('/profiles/:profileId/click-config', (req, res) => {
+    try {
+      const pid = parseInt(req.params.profileId);
+      const { click_enabled, click_count } = req.body;
+
+      const existing = models.getIxProfile(pid);
+      if (!existing) return res.status(404).json({ ok: false, error: 'Perfil não encontrado.' });
+
+      const ce = parseInt(click_enabled);
+      const cc = parseInt(click_count);
+
+      if (ce !== 0 && ce !== 1) {
+        return res.status(400).json({ ok: false, error: 'click_enabled deve ser 0 ou 1.' });
+      }
+      if (isNaN(cc) || cc < 0) {
+        return res.status(400).json({ ok: false, error: 'click_count deve ser um número inteiro maior ou igual a 0.' });
+      }
+
+      models.updateIxProfileClickConfig(pid, ce, cc);
+
+      // Notifica o dashboard em tempo real
+      io.emit('profiles:updated', { profiles: models.getAllIxProfiles() });
+      return res.json({ ok: true, message: 'Configurações de cliques atualizadas com sucesso.' });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
   // ─── DELETE /api/profiles/:profileId ─────────────────────────────────────
   router.delete('/profiles/:profileId', (req, res) => {
     try {
