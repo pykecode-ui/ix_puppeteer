@@ -332,6 +332,19 @@ class SearchWorker {
       result.status = 'error';
       result.errorMessage = err.message;
       this.log(`[SearchWorker] ❌ Erro na pesquisa "${keyword}": ${err.message}`);
+
+      // Verifica se o erro indica perda de conexão com o navegador (Browser/CDP desconectado)
+      const isConnectionLost = 
+        err.message.includes('Protocol error') || 
+        err.message.includes('Connection closed') || 
+        err.message.includes('Target closed') || 
+        err.message.includes('Browser closed') || 
+        err.message.includes('Session closed') || 
+        err.message.includes('detached');
+
+      if (isConnectionLost) {
+        throw new Error(`Conexão com o navegador perdida durante a busca de "${keyword}": ${err.message}`);
+      }
     }
 
     result.durationMs = Date.now() - startTime;

@@ -480,7 +480,7 @@ const COMMANDS = {
    * payload: {}
    */
   async pause_bot() {
-    log('warn', '⏸ Pausando bot — cancelando todos os loops e fechando perfis...');
+    log('warn', '⏸ Pausando bot — cancelando todos os loops e iniciando fechamento...');
     if (global._profileLoops) {
       for (const [profileId, loop] of global._profileLoops.entries()) {
         log('info', `Cancelando loop do perfil #${profileId}...`);
@@ -490,8 +490,14 @@ const COMMANDS = {
       }
       global._profileLoops.clear();
     }
-    await COMMANDS.close_all_profiles();
-    log('success', '⏹ Bot pausado com sucesso.');
+
+    // Executa o fechamento físico dos perfis em background (fire-and-forget)
+    // para evitar que instabilidades na Local API do ixBrowser travem a interface em "Pausando..."
+    COMMANDS.close_all_profiles().catch(err => {
+      log('error', `Erro ao fechar perfis após pausar: ${err.message}`);
+    });
+
+    log('success', '⏹ Bot pausado com sucesso. Interface liberada.');
     client.sendRunState(BOT_ID, 'idle');
     return { ok: true };
   },
