@@ -125,6 +125,18 @@ function createBotRouter(io) {
     }
   });
 
+  // ─── GET /api/logs ───────────────────────────────────────────────────────
+  // Retorna os últimos logs globais (todos os bots).
+  router.get('/logs', (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit) || 100;
+      const logs = models.getAllBotLogs(limit);
+      return res.json({ ok: true, logs });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
   // ─── GET /api/bots/:botId/logs ───────────────────────────────────────────
   router.get('/bots/:botId/logs', (req, res) => {
     try {

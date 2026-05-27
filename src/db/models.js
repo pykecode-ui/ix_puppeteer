@@ -236,12 +236,26 @@ function getBotStatusHistory(botId, limit = 20) {
  * @param {string} message
  */
 function addBotLog(botId, level, message) {
-  getDB()
-    .prepare(`
+  const db = getDB();
+  db.prepare(`
       INSERT INTO bot_logs (bot_id, level, message, created_at)
       VALUES (?, ?, ?, ?)
     `)
     .run(botId, level, message, nowBrasilia());
+
+  // Limpa logs antigos para manter o banco enxuto (últimos 1000 logs)
+  try {
+    db.prepare(`
+      DELETE FROM bot_logs 
+      WHERE id NOT IN (
+        SELECT id FROM bot_logs 
+        ORDER BY id DESC 
+        LIMIT 1000
+      )
+    `).run();
+  } catch (err) {
+    console.error('[DB] Erro ao limpar logs antigos:', err.message);
+  }
 }
 
 /**
@@ -254,6 +268,17 @@ function getBotLogs(botId, limit = 100) {
   return getDB()
     .prepare('SELECT * FROM bot_logs WHERE bot_id = ? ORDER BY id DESC LIMIT ?')
     .all(botId, limit);
+}
+
+/**
+ * Retorna os últimos N logs de todos os bots (globais).
+ * @param {number} limit
+ * @returns {Array}
+ */
+function getAllBotLogs(limit = 100) {
+  return getDB()
+    .prepare('SELECT * FROM bot_logs ORDER BY id DESC LIMIT ?')
+    .all(limit);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -755,6 +780,7 @@ module.exports = {
   // Bot logs
   addBotLog,
   getBotLogs,
+  getAllBotLogs,
   // Bot status history (online/offline em tempo real)
   recordBotStatusChange,
   getBotStatusHistory,

@@ -420,7 +420,10 @@ function appendLog(botId, level, message, timestamp) {
   entry.className = `log-entry ${level || 'info'}`;
   entry.dataset.botId = botId || 'system';
 
-  const ts = timestamp || new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  let ts = timestamp || new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  if (ts.includes(' ')) {
+    ts = ts.split(' ')[1];
+  }
   const botLabel = botId && state.bots[botId] ? `[${state.bots[botId].name || botId.slice(0, 8)}] ` : '';
 
   entry.innerHTML = `
@@ -821,6 +824,27 @@ function showToastModerno(message, type = 'info') {
 }
 
 window.showToastModerno = showToastModerno;
+
+// Carrega os logs históricos
+async function loadLogsHistory() {
+  try {
+    const res = await fetch('/api/logs?limit=100');
+    const data = await res.json();
+    if (data.ok && Array.isArray(data.logs)) {
+      // O SQL retorna em ordem decrescente (mais recente primeiro),
+      // mas no terminal queremos acrescentar na ordem cronológica (mais antigo primeiro).
+      // Então invertemos o array antes de dar append.
+      const reversedLogs = [...data.logs].reverse();
+      reversedLogs.forEach((l) => {
+        appendLog(l.bot_id, l.level, l.message, l.created_at);
+      });
+    }
+  } catch (err) {
+    console.error('[Dashboard] Erro ao carregar logs históricos:', err);
+  }
+}
+
+loadLogsHistory();
 
 // Log de inicialização
 appendLog(null, 'info', 'Dashboard iniciado. Aguardando bots...');
