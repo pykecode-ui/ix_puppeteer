@@ -230,7 +230,7 @@ function renderAdsTable() {
                       data-keywords="${escapeHtmlAds(kwList.join(','))}" 
                       title="Ver todas as palavras-chave (${kwList.length})" 
                       style="padding:2px 6px; font-size:11px; display:inline-flex; align-items:center; gap:4px; cursor:pointer;">
-                🔑 Keywords (${kwList.length})
+                🔑 (${kwList.length})
               </button>
             </div>
             ${ad.ad_description ? `<div class="ad-desc-cell">${escapeHtmlAds(truncate(ad.ad_description, 70))}</div>` : ''}
