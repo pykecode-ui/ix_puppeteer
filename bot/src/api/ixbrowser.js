@@ -8,7 +8,7 @@ const axios = require('axios');
 const config = require('../../config');
 
 const HEADERS = { 'Content-Type': 'application/json' };
-const RETRY_ATTEMPTS = 3;
+const RETRY_ATTEMPTS = 5;
 const RETRY_DELAY_MS = 1500;
 
 function sleep(ms) {
@@ -65,7 +65,20 @@ async function _doCallAPI(endpoint, body, attempt, options) {
 
       if (isRetryableError && attempt < RETRY_ATTEMPTS) {
         if (!options.silent) console.warn(`[ixBrowser] Erro interno da API (código ${data.error.code}) — tentativa ${attempt}/${RETRY_ATTEMPTS}...`);
-        await sleep(RETRY_DELAY_MS);
+        
+        // Se for falha na abertura de perfil, fazemos um reset de estado preventivo no ixBrowser antes de retentar
+        if (endpoint.includes('profile-open') && body && body.profile_id) {
+          try {
+            if (!options.silent) console.warn(`[ixBrowser] Resetando status de abertura do perfil #${body.profile_id} antes da retentativa...`);
+            await axios.post(`${config.IX_API_BASE}/api/v2/profile-open-state-reset`, {
+              profile_id: Number(body.profile_id)
+            }, { headers: HEADERS, timeout: 10000 });
+          } catch (resetErr) {
+            // Silencioso se der erro no reset
+          }
+        }
+
+        await sleep(RETRY_DELAY_MS * attempt); // Backoff linear
         return _doCallAPI(endpoint, body, attempt + 1, options);
       }
       throw new Error(`ixBrowser API Error [${data.error.code}]: ${data.error.message}`);
@@ -83,7 +96,7 @@ async function _doCallAPI(endpoint, body, attempt, options) {
     const isNetworkError = ['ENOTFOUND', 'ETIMEDOUT', 'ECONNRESET', 'EAI_AGAIN'].includes(err.code);
     if (isNetworkError && attempt < RETRY_ATTEMPTS) {
       if (!options.silent) console.warn(`[ixBrowser] Erro de rede (${err.code}) — tentativa ${attempt}/${RETRY_ATTEMPTS}...`);
-      await sleep(RETRY_DELAY_MS);
+      await sleep(RETRY_DELAY_MS * attempt); // Backoff linear
       return _doCallAPI(endpoint, body, attempt + 1, options);
     }
 
@@ -152,4 +165,14 @@ async function listOpenedProfiles() {
   return await callAPI('/api/v2/profile-opened-list', {}, { silent: true });
 }
 
-module.exports = { openProfile, closeProfile, listOpenedProfiles };
+/**
+ * Reseta o estado de abertura do perfil no ixBrowser.
+ * @param {number|string} profileId
+ */
+async function resetProfileState(profileId) {
+  return await callAPI('/api/v2/profile-open-state-reset', {
+    profile_id: Number(profileId),
+  });
+}
+
+module.exports = { openProfile, closeProfile, listOpenedProfiles, resetProfileState };

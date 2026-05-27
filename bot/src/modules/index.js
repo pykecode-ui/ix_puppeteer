@@ -111,6 +111,15 @@ async function runProfileLoop(profileId, http) {
         openRes = await COMMANDS.open_profile({ profileId });
       } catch (err) {
         log('error', `❌ [Ciclo ${iteration}] Perfil #${profileId}: Falha ao abrir perfil: ${err.message}`);
+        
+        // Tenta resetar o estado de abertura no ixBrowser preventivamente para destravar
+        try {
+          log('info', `🔄 [Ciclo ${iteration}] Perfil #${profileId}: Solicitando reset do estado do perfil no ixBrowser...`);
+          await ixbrowser.resetProfileState(profileId);
+        } catch (resetErr) {
+          log('warn', `⚠️ [Ciclo ${iteration}] Perfil #${profileId}: Não foi possível resetar o estado no ixBrowser: ${resetErr.message}`);
+        }
+
         if (cancelled) break;
         await sleep(10000);
         continue;
