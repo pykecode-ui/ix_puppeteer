@@ -1,20 +1,21 @@
 /**
- * public/js/anuncios.js
+ * public/js/sem-flags-page.js
  * ─────────────────────────────────────────────────────────────────────────────
- * Módulo de Anúncios (#anuncios) — exibe resultados das pesquisas dos bots.
+ * Módulo da página dedicada de Anúncios Sem Flags (Neutros).
+ * Exibe apenas os anúncios que não possuem classificação (blacklist/safelist/suspeitos),
+ * com suporte a busca, ordenação, paginação e WebSocket para tempo real.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 // ── Estado ──────────────────────────────────────────────────────────────────
-const adsState = {
+const neutralState = {
   ads: [],
   total: 0,
   page: 0,
   perPage: 30,
   filterKeyword: '',
   filterDomain: '',
-  stats: null,
-  topAdvertisers: [],
+  orderBy: 'recent' // 'recent' ou 'repetitions'
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -99,77 +100,54 @@ function flagBadges(ad) {
   return html || '<span class="dim-text">—</span>';
 }
 
-// ── Carregar Stats ──────────────────────────────────────────────────────────
-
-async function loadAdsStats() {
-  try {
-    const res = await fetch('/api/ads/stats');
-    const data = await res.json();
-    if (!data.ok) return;
-
-    adsState.stats = data.stats;
-    if (document.getElementById('statTotalAds')) {
-      document.getElementById('statTotalAds').textContent = data.stats.totalAds || 0;
-    }
-    if (document.getElementById('statUniqueDomains')) {
-      document.getElementById('statUniqueDomains').textContent = data.stats.uniqueDomains || 0;
-    }
-    if (document.getElementById('statUniqueKeywords')) {
-      document.getElementById('statUniqueKeywords').textContent = data.stats.uniqueKeywords || 0;
-    }
-    if (document.getElementById('statBlacklistedAds')) {
-      document.getElementById('statBlacklistedAds').textContent = data.stats.totalBlacklisted || 0;
-    }
-    if (document.getElementById('statWhitelistedAds')) {
-      document.getElementById('statWhitelistedAds').textContent = data.stats.totalWhitelisted || 0;
-    }
-    if (document.getElementById('statSuspiciousAds')) {
-      document.getElementById('statSuspiciousAds').textContent = data.stats.totalSuspicious || 0;
-    }
-    if (document.getElementById('statNeutralAds')) {
-      document.getElementById('statNeutralAds').textContent = data.stats.totalNeutrals || 0;
-    }
-
-    // Badge no nav
-    if (document.getElementById('navAdsCount')) {
-      document.getElementById('navAdsCount').textContent = data.stats.totalAds || 0;
-    }
-  } catch (_) {}
+function createEmptyState() {
+  const div = document.createElement('div');
+  div.className = 'profile-empty-state';
+  div.id = 'adsEmptyState';
+  div.innerHTML = `
+    <div class="empty-icon">📢</div>
+    <div class="empty-title">Nenhum anúncio sem classificação encontrado</div>
+    <div class="empty-desc">Anúncios novos e neutros capturados pelos robôs aparecerão aqui em tempo real.</div>
+  `;
+  return div;
 }
 
-// ── Carregar Anúncios ───────────────────────────────────────────────────────
+// ── Carregar Anúncios Sem Flags ─────────────────────────────────────────────
 
-async function loadAds() {
-  const offset = adsState.page * adsState.perPage;
+async function loadNeutralAds() {
+  const offset = neutralState.page * neutralState.perPage;
   const params = new URLSearchParams({
-    limit: adsState.perPage,
+    limit: neutralState.perPage,
     offset,
+    no_flags: 'true',
+    orderBy: neutralState.orderBy
   });
-  if (adsState.filterKeyword) params.set('keyword', adsState.filterKeyword);
-  if (adsState.filterDomain) params.set('domain', adsState.filterDomain);
+
+  if (neutralState.filterKeyword) params.set('keyword', neutralState.filterKeyword);
+  if (neutralState.filterDomain) params.set('domain', neutralState.filterDomain);
 
   try {
     const res = await fetch(`/api/ads/all?${params}`);
     const data = await res.json();
     if (!data.ok) return;
 
-    adsState.ads = data.ads || [];
-    adsState.total = data.total || 0;
+    neutralState.ads = data.ads || [];
+    neutralState.total = data.total || 0;
 
     renderAdsTable();
     updatePagination();
   } catch (err) {
-    console.error('[Anúncios] Erro ao carregar:', err);
+    console.error('[Sem Flags] Erro ao carregar anúncios:', err);
   }
 }
 
-// ── Render Tabela ───────────────────────────────────────────────────────────
+// ── Renderizar Tabela ───────────────────────────────────────────────────────
 
 function renderAdsTable() {
   const container = document.getElementById('adsTableContainer');
   const emptyState = document.getElementById('adsEmptyState');
 
-  if (adsState.ads.length === 0) {
+  if (neutralState.ads.length === 0) {
     container.innerHTML = '';
     container.appendChild(emptyState || createEmptyState());
     if (emptyState) emptyState.style.display = 'flex';
@@ -201,7 +179,7 @@ function renderAdsTable() {
       </tr>
     </thead>
     <tbody>
-      ${adsState.ads.map(ad => {
+      ${neutralState.ads.map(ad => {
         const reps = ad.repetitions || 1;
         const repClass = reps >= 5 ? 'rep-high' : reps >= 2 ? 'rep-mid' : 'rep-low';
         const kwList = (ad.keywords || ad.keyword || '').split(',').filter(Boolean);
@@ -213,17 +191,8 @@ function renderAdsTable() {
         const rawTitles = ad.all_titles || (ad.ad_title ? (ad.ad_description ? `${ad.ad_title} ::: ${ad.ad_description}` : ad.ad_title) : '');
         const titles = [...new Set(rawTitles.split(' ||| ').map(t => t.trim()).filter(Boolean))];
 
-        let rowClass = '';
-        if (ad.is_blacklisted) {
-          rowClass = 'ad-row-blacklisted';
-        } else if (ad.is_whitelisted) {
-          rowClass = 'ad-row-whitelisted';
-        } else if (ad.is_suspicious) {
-          rowClass = 'ad-row-suspicious';
-        }
-
         return `
-        <tr data-ad-ids="${ad.all_ids || ad.id}" class="${rowClass}">
+        <tr data-ad-ids="${ad.all_ids || ad.id}">
           <td style="text-align:center;">
             <span class="ad-rep-badge ${repClass}">${reps}x</span>
           </td>
@@ -306,7 +275,7 @@ function renderAdsTable() {
   container.innerHTML = '';
   container.appendChild(table);
 
-  // Bind details buttons
+  // Bind dos botões de detalhes/info
   table.querySelectorAll('.ad-details-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -317,7 +286,7 @@ function renderAdsTable() {
     });
   });
 
-  // Bind copy buttons
+  // Bind dos botões de copiar links
   table.querySelectorAll('.ad-copy-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -348,8 +317,7 @@ function renderAdsTable() {
             showToast(data.message, 'warning');
           } else {
             showToast('Domínio adicionado à Blacklist!', 'success');
-            loadAds();
-            loadAdsStats();
+            loadNeutralAds();
           }
         } else {
           showToast('Erro: ' + (data.error || 'Falha ao salvar'), 'error');
@@ -378,8 +346,7 @@ function renderAdsTable() {
             showToast(data.message, 'warning');
           } else {
             showToast('Domínio adicionado à Safelist!', 'success');
-            loadAds();
-            loadAdsStats();
+            loadNeutralAds();
           }
         } else {
           showToast('Erro: ' + (data.error || 'Falha ao salvar'), 'error');
@@ -390,388 +357,49 @@ function renderAdsTable() {
     });
   });
 
-  // Bind delete buttons — exclui todos os IDs do grupo
+  // Bind dos botões de exclusão
   table.querySelectorAll('.ad-delete-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       const ids = (btn.dataset.adIds || '').split(',').map(Number).filter(Boolean);
       const count = ids.length;
-      if (!confirm(`Excluir ${count} registro${count > 1 ? 's' : ''} deste anúncio?`)) return;
+      if (!confirm(`Excluir ${count} registro${count > 1 ? 's' : ''} deste anúncio sem flags?`)) return;
       try {
         await Promise.all(ids.map(id => fetch(`/api/ads/${id}`, { method: 'DELETE' })));
-        loadAds();
-        loadAdsStats();
+        loadNeutralAds();
       } catch (_) {}
     });
   });
 }
 
-function createEmptyState() {
-  const div = document.createElement('div');
-  div.className = 'profile-empty-state';
-  div.id = 'adsEmptyState';
-  div.innerHTML = `
-    <div class="empty-icon">📢</div>
-    <div class="empty-title">Nenhum anúncio encontrado</div>
-    <div class="empty-desc">Os anúncios aparecerão aqui após as pesquisas dos bots.</div>
-  `;
-  return div;
-}
-
 // ── Paginação ───────────────────────────────────────────────────────────────
 
 function updatePagination() {
-  const pagination = document.getElementById('adsPagination');
+  const container = document.getElementById('adsPagination');
   const info = document.getElementById('adsPaginationInfo');
-  const prevBtn = document.getElementById('btnAdsPrevPage');
-  const nextBtn = document.getElementById('btnAdsNextPage');
+  const btnPrev = document.getElementById('btnAdsPrevPage');
+  const btnNext = document.getElementById('btnAdsNextPage');
 
-  if (adsState.total === 0) {
-    pagination.style.display = 'none';
+  if (neutralState.total <= neutralState.perPage) {
+    if (container) container.style.display = 'none';
     return;
   }
 
-  pagination.style.display = 'flex';
+  if (container) container.style.display = 'flex';
 
-  const start = adsState.page * adsState.perPage + 1;
-  const end = Math.min(start + adsState.perPage - 1, adsState.total);
-  const totalPages = Math.ceil(adsState.total / adsState.perPage);
+  const maxPage = Math.ceil(neutralState.total / neutralState.perPage) - 1;
+  const startIdx = neutralState.page * neutralState.perPage + 1;
+  const endIdx = Math.min((neutralState.page + 1) * neutralState.perPage, neutralState.total);
 
-  info.textContent = `${start}–${end} de ${adsState.total} anúncio(s) · Página ${adsState.page + 1}/${totalPages}`;
-  prevBtn.disabled = adsState.page <= 0;
-  nextBtn.disabled = end >= adsState.total;
+  if (info) {
+    info.textContent = `Exibindo ${startIdx}-${endIdx} de ${neutralState.total} domínios sem flags`;
+  }
+
+  if (btnPrev) btnPrev.disabled = neutralState.page === 0;
+  if (btnNext) btnNext.disabled = neutralState.page >= maxPage;
 }
 
-// ── Top Anunciantes ─────────────────────────────────────────────────────────
+// ── Modal de Histórico de Títulos ────────────────────────────────────────────
 
-async function loadTopAdvertisers() {
-  const container = document.getElementById('topAdvertisersContainer');
-  try {
-    const res = await fetch('/api/ads/top-advertisers?limit=15');
-    const data = await res.json();
-    if (!data.ok || !data.advertisers || data.advertisers.length === 0) {
-      container.innerHTML = '<div class="log-empty"><span>Nenhum anunciante encontrado.</span></div>';
-      return;
-    }
-
-    adsState.topAdvertisers = data.advertisers;
-    const maxApp = data.advertisers[0]?.appearances || 1;
-
-    container.innerHTML = `
-      <div class="top-advertisers-list">
-        ${data.advertisers.map((adv, i) => {
-          const pct = Math.max(5, (adv.appearances / maxApp) * 100);
-          const flagged = adv.times_blacklisted > 0;
-          return `
-            <div class="top-adv-row ${flagged ? 'flagged' : ''}">
-              <div class="top-adv-rank">${i + 1}</div>
-              <div class="top-adv-info">
-                <div class="top-adv-domain" title="${escapeHtmlAds(adv.display_url)}">${escapeHtmlAds(truncate(adv.display_url, 50))}</div>
-                <div class="top-adv-bar-bg">
-                  <div class="top-adv-bar" style="width:${pct}%"></div>
-                </div>
-              </div>
-              <div class="top-adv-stats">
-                <span class="top-adv-count">${adv.appearances}x</span>
-                ${flagged ? `<span class="ad-flag blacklisted" title="${adv.times_blacklisted} blacklisted">🚨 ${adv.times_blacklisted}</span>` : ''}
-              </div>
-            </div>
-          `;
-        }).join('')}
-      </div>
-    `;
-  } catch (_) {
-    container.innerHTML = '<div class="log-empty"><span>Erro ao carregar.</span></div>';
-  }
-}
-
-// ── Event Listeners ─────────────────────────────────────────────────────────
-
-document.getElementById('btnRefreshAds')?.addEventListener('click', () => {
-  loadAds();
-  loadAdsStats();
-  loadTopAdvertisers();
-});
-
-document.getElementById('btnClearAllAds')?.addEventListener('click', async () => {
-  if (!confirm('⚠️ Tem certeza que deseja excluir TODOS os anúncios? Esta ação é irreversível.')) return;
-  try {
-    await fetch('/api/ads/clear-all', { method: 'DELETE' });
-    adsState.page = 0;
-    loadAds();
-    loadAdsStats();
-    loadTopAdvertisers();
-  } catch (_) {}
-});
-
-document.getElementById('btnApplyAdsFilter')?.addEventListener('click', () => {
-  adsState.filterKeyword = document.getElementById('adsFilterKeyword')?.value.trim() || '';
-  adsState.filterDomain = document.getElementById('adsFilterDomain')?.value.trim() || '';
-  adsState.page = 0;
-  loadAds();
-});
-
-// Enter nos filtros
-document.getElementById('adsFilterKeyword')?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') document.getElementById('btnApplyAdsFilter')?.click();
-});
-document.getElementById('adsFilterDomain')?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') document.getElementById('btnApplyAdsFilter')?.click();
-});
-
-document.getElementById('btnAdsPrevPage')?.addEventListener('click', () => {
-  if (adsState.page > 0) {
-    adsState.page--;
-    loadAds();
-  }
-});
-
-document.getElementById('btnAdsNextPage')?.addEventListener('click', () => {
-  const maxPage = Math.ceil(adsState.total / adsState.perPage) - 1;
-  if (adsState.page < maxPage) {
-    adsState.page++;
-    loadAds();
-  }
-});
-
-// ── Real-time via Socket ────────────────────────────────────────────────────
-
-document.addEventListener('ads:new-ad', () => {
-  // Atualiza se estiver na página de anúncios
-  const section = document.getElementById('sectionAnuncios');
-  if (section?.classList.contains('active')) {
-    loadAds();
-    loadAdsStats();
-    loadTopAdvertisers();
-  }
-});
-
-document.addEventListener('ads:updated', () => {
-  const section = document.getElementById('sectionAnuncios');
-  if (section?.classList.contains('active')) {
-    loadAds();
-    loadAdsStats();
-    loadTopAdvertisers();
-  }
-});
-
-// ── Inicialização ───────────────────────────────────────────────────────────
-
-// Carrega dados quando a seção fica visível (troca de menu)
-const adsObserver = new MutationObserver(() => {
-  const section = document.getElementById('sectionAnuncios');
-  if (section?.classList.contains('active')) {
-    loadAds();
-    loadAdsStats();
-    loadTopAdvertisers();
-  }
-});
-
-const anunciosSection = document.getElementById('sectionAnuncios');
-if (anunciosSection) {
-  adsObserver.observe(anunciosSection, { attributes: true, attributeFilter: ['class'] });
-
-  // Se a seção JÁ está ativa ao carregar (F5 em #anuncios), carrega imediatamente
-  if (anunciosSection.classList.contains('active')) {
-    loadAds();
-    loadAdsStats();
-    loadTopAdvertisers();
-  }
-}
-
-// Carrega stats na inicialização (para o badge do nav)
-loadAdsStats();
-
-// ══════════════════════════════════════════════════════════════════════════════
-// BLACKLIST MODAL
-// ══════════════════════════════════════════════════════════════════════════════
-
-(function initBlacklistModal() {
-  const overlay = document.getElementById('blacklistModalOverlay');
-  const textarea = document.getElementById('blacklistTextarea');
-  const wordCount = document.getElementById('blacklistWordCount');
-  const btnOpen = document.getElementById('btnOpenBlacklist');
-  const btnClose = document.getElementById('btnCloseBlacklist');
-  const btnCancel = document.getElementById('btnCancelBlacklist');
-  const btnSave = document.getElementById('btnSaveBlacklist');
-
-  if (!overlay || !textarea || !btnOpen) return;
-
-  function updateWordCount() {
-    const lines = textarea.value.split('\n').map(l => l.trim()).filter(Boolean);
-    wordCount.textContent = `${lines.length} regra${lines.length !== 1 ? 's' : ''}`;
-  }
-
-  async function loadBlacklistRules() {
-    try {
-      const res = await fetch('/api/ads/blacklist');
-      const data = await res.json();
-      if (data.ok && data.rules) {
-        textarea.value = data.rules.map(r => r.pattern).join('\n');
-      }
-    } catch (_) {}
-    updateWordCount();
-  }
-
-  // Abrir modal
-  btnOpen.addEventListener('click', () => {
-    overlay.classList.add('visible');
-    loadBlacklistRules();
-    setTimeout(() => textarea.focus(), 100);
-  });
-
-  // Fechar modal
-  function closeModal() {
-    overlay.classList.remove('visible');
-  }
-
-  btnClose.addEventListener('click', closeModal);
-  btnCancel.addEventListener('click', closeModal);
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) closeModal();
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && overlay.classList.contains('visible')) closeModal();
-  });
-
-  textarea.addEventListener('input', updateWordCount);
-
-  btnSave.addEventListener('click', async () => {
-    const lines = textarea.value.split('\n').map(l => l.trim()).filter(Boolean);
-    btnSave.disabled = true;
-    btnSave.textContent = '⏳ Salvando...';
-
-    try {
-      const res = await fetch('/api/ads/blacklist/bulk-sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ patterns: lines }),
-      });
-      const data = await res.json();
-
-      if (data.ok) {
-        closeModal();
-        loadAds();
-        loadAdsStats();
-        showToast('Blacklist sincronizada com sucesso!', 'success');
-      } else {
-        showToast('Erro: ' + (data.error || 'Falha ao salvar'), 'error');
-      }
-    } catch (err) {
-      showToast('Erro de rede: ' + err.message, 'error');
-    } finally {
-      btnSave.disabled = false;
-      btnSave.textContent = '💾 Salvar';
-    }
-  });
-
-  if (typeof socket !== 'undefined') {
-    socket.on('ads:blacklist:updated', () => {
-      if (!overlay.classList.contains('visible')) {
-        loadAds();
-        loadAdsStats();
-      }
-    });
-  }
-})();
-
-// ══════════════════════════════════════════════════════════════════════════════
-// WHITELIST / SAFELIST MODAL
-// ══════════════════════════════════════════════════════════════════════════════
-
-(function initWhitelistModal() {
-  const overlay = document.getElementById('whitelistModalOverlay');
-  const textarea = document.getElementById('whitelistTextarea');
-  const wordCount = document.getElementById('whitelistWordCount');
-  const btnOpen = document.getElementById('btnOpenWhitelist');
-  const btnClose = document.getElementById('btnCloseWhitelist');
-  const btnCancel = document.getElementById('btnCancelWhitelist');
-  const btnSave = document.getElementById('btnSaveWhitelist');
-
-  if (!overlay || !textarea || !btnOpen) return;
-
-  function updateWordCount() {
-    const lines = textarea.value.split('\n').map(l => l.trim()).filter(Boolean);
-    wordCount.textContent = `${lines.length} regra${lines.length !== 1 ? 's' : ''}`;
-  }
-
-  async function loadWhitelistRules() {
-    try {
-      const res = await fetch('/api/ads/whitelist');
-      const data = await res.json();
-      if (data.ok && data.rules) {
-        textarea.value = data.rules.map(r => r.pattern).join('\n');
-      }
-    } catch (_) {}
-    updateWordCount();
-  }
-
-  // Abrir modal
-  btnOpen.addEventListener('click', () => {
-    overlay.classList.add('visible');
-    loadWhitelistRules();
-    setTimeout(() => textarea.focus(), 100);
-  });
-
-  // Fechar modal
-  function closeModal() {
-    overlay.classList.remove('visible');
-  }
-
-  btnClose?.addEventListener('click', closeModal);
-  btnCancel?.addEventListener('click', closeModal);
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) closeModal();
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && overlay.classList.contains('visible')) closeModal();
-  });
-
-  textarea.addEventListener('input', updateWordCount);
-
-  btnSave.addEventListener('click', async () => {
-    const lines = textarea.value.split('\n').map(l => l.trim()).filter(Boolean);
-    btnSave.disabled = true;
-    btnSave.textContent = '⏳ Salvando...';
-
-    try {
-      const res = await fetch('/api/ads/whitelist/bulk-sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ patterns: lines }),
-      });
-      const data = await res.json();
-
-      if (data.ok) {
-        closeModal();
-        loadAds();
-        loadAdsStats();
-        showToast('Safelist sincronizada com sucesso!', 'success');
-      } else {
-        showToast('Erro: ' + (data.error || 'Falha ao salvar'), 'error');
-      }
-    } catch (err) {
-      showToast('Erro de rede: ' + err.message, 'error');
-    } finally {
-      btnSave.disabled = false;
-      btnSave.textContent = '💾 Salvar';
-    }
-  });
-
-  if (typeof socket !== 'undefined') {
-    socket.on('ads:whitelist:updated', () => {
-      if (!overlay.classList.contains('visible')) {
-        loadAds();
-        loadAdsStats();
-      }
-    });
-  }
-})();
-
-/**
- * Abre o modal de títulos do anúncio.
- * @param {string} domain
- * @param {Array<string>} titles
- */
 function openAdTitlesModal(domain, titles) {
   const overlay = document.getElementById('adTitlesModalOverlay');
   const domainLabel = document.getElementById('adTitlesDomainLabel');
@@ -794,8 +422,7 @@ function openAdTitlesModal(domain, titles) {
   overlay.classList.add('visible');
 }
 
-// Inicializa o modal de títulos
-(function initAdTitlesModal() {
+function initAdTitlesModal() {
   const overlay = document.getElementById('adTitlesModalOverlay');
   const btnClose = document.getElementById('btnCloseAdTitles');
   const btnCloseOk = document.getElementById('btnCloseAdTitlesOk');
@@ -814,5 +441,58 @@ function openAdTitlesModal(domain, titles) {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && overlay.classList.contains('visible')) closeModal();
   });
-})();
+}
 
+// ── Bind de Eventos e Filtros ───────────────────────────────────────────────
+
+document.getElementById('btnApplyFilters')?.addEventListener('click', () => {
+  neutralState.filterKeyword = document.getElementById('filterKeyword')?.value.trim() || '';
+  neutralState.filterDomain = document.getElementById('filterDomain')?.value.trim() || '';
+  neutralState.orderBy = document.getElementById('orderBy')?.value || 'recent';
+  neutralState.page = 0;
+  loadNeutralAds();
+});
+
+document.getElementById('btnAdsPrevPage')?.addEventListener('click', () => {
+  if (neutralState.page > 0) {
+    neutralState.page--;
+    loadNeutralAds();
+  }
+});
+
+document.getElementById('btnAdsNextPage')?.addEventListener('click', () => {
+  const maxPage = Math.ceil(neutralState.total / neutralState.perPage) - 1;
+  if (neutralState.page < maxPage) {
+    neutralState.page++;
+    loadNeutralAds();
+  }
+});
+
+// ── Real-time via Socket (CustomEvents repassados pelo socket.js) ───────────
+
+document.addEventListener('ads:new-ad', (e) => {
+  const ad = e.detail;
+  // Recarrega caso o anúncio novo seja neutro (sem flags)
+  if (ad && !ad.is_blacklisted && !ad.is_whitelisted && !ad.is_suspicious) {
+    loadNeutralAds();
+  }
+});
+
+document.addEventListener('ads:updated', () => {
+  loadNeutralAds();
+});
+
+document.addEventListener('ads:blacklist:updated', () => {
+  loadNeutralAds();
+});
+
+document.addEventListener('ads:whitelist:updated', () => {
+  loadNeutralAds();
+});
+
+// ── Inicialização ───────────────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  initAdTitlesModal();
+  loadNeutralAds();
+});

@@ -346,6 +346,14 @@ body {
   box-shadow: 0 0 6px rgba(168, 85, 247, 0.15);
 }
 
+/* Variante Neutral (Sem Flags) */
+.stat-card-btn.neutral-btn:hover {
+  background: rgba(59, 130, 246, 0.12);
+  color: #60a5fa;
+  border-color: rgba(59, 130, 246, 0.3);
+  box-shadow: 0 0 6px rgba(59, 130, 246, 0.15);
+}
+
 /* ── Cards ────────────────────────────────────────────────────────────────── */
 .card {
   background: var(--bg-card);

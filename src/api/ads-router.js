@@ -181,9 +181,12 @@ function createAdsRouter(io) {
       const is_suspicious = req.query.is_suspicious !== undefined
         ? req.query.is_suspicious === 'true' || req.query.is_suspicious === '1'
         : undefined;
+      const no_flags = req.query.no_flags !== undefined
+        ? req.query.no_flags === 'true' || req.query.no_flags === '1'
+        : undefined;
       const orderBy = req.query.orderBy || 'recent';
 
-      const result = adsModels.getAllAds({ limit, offset, keyword, domain, is_blacklisted, is_whitelisted, is_suspicious, orderBy });
+      const result = adsModels.getAllAds({ limit, offset, keyword, domain, is_blacklisted, is_whitelisted, is_suspicious, no_flags, orderBy });
       res.json({ ok: true, ...result });
     } catch (err) {
       res.status(500).json({ ok: false, error: err.message });

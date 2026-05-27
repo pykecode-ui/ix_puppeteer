@@ -267,6 +267,12 @@ function getAdsStats() {
     )
   `).get().count;
 
+  const totalNeutrals = db.prepare(`
+    SELECT COUNT(*) AS count FROM (
+      SELECT 1 FROM serp_ads WHERE is_blacklisted = 0 AND is_whitelisted = 0 AND is_suspicious = 0 GROUP BY COALESCE(display_url, '')
+    )
+  `).get().count;
+
   const totalSessions = db.prepare('SELECT COUNT(*) AS count FROM search_sessions').get().count;
   const totalSearches = db.prepare('SELECT COUNT(*) AS count FROM search_executions').get().count;
   const uniqueKeywords = db.prepare('SELECT COUNT(DISTINCT keyword) AS count FROM search_executions').get().count;
@@ -278,6 +284,7 @@ function getAdsStats() {
     totalWhitelisted,
     totalBlacklisted,
     totalSuspicious,
+    totalNeutrals,
     totalSessions,
     totalSearches,
     uniqueKeywords,
@@ -542,7 +549,7 @@ function buildAdHaystack({ href_raw, href_decoded, display_url, ad_title, ad_des
  * @param {string} domain - filtro opcional por domínio
  * @returns {{ads: Array, total: number}}
  */
-function getAllAds({ limit = 50, offset = 0, keyword, domain, is_blacklisted, is_whitelisted, is_suspicious, orderBy = 'recent' } = {}) {
+function getAllAds({ limit = 50, offset = 0, keyword, domain, is_blacklisted, is_whitelisted, is_suspicious, no_flags, orderBy = 'recent' } = {}) {
   const db = getAdsDB();
   let where = [];
   let params = [];
@@ -566,6 +573,9 @@ function getAllAds({ limit = 50, offset = 0, keyword, domain, is_blacklisted, is
   if (is_suspicious !== undefined) {
     where.push('is_suspicious = ?');
     params.push(is_suspicious ? 1 : 0);
+  }
+  if (no_flags !== undefined && no_flags) {
+    where.push('is_blacklisted = 0 AND is_whitelisted = 0 AND is_suspicious = 0');
   }
 
   const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
