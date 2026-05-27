@@ -182,7 +182,12 @@ function renderAdsTable() {
         const reps = ad.repetitions || 1;
         const repClass = reps >= 5 ? 'rep-high' : reps >= 2 ? 'rep-mid' : 'rep-low';
         const kwList = (ad.keywords || ad.keyword || '').split(',').filter(Boolean);
-        const kwChips = kwList.map(kw => `<span class="ad-keyword-chip" title="${escapeHtmlAds(kw.trim())}">${escapeHtmlAds(kw.trim())}</span>`).join(' ');
+        const firstKw = kwList[0] ? kwList[0].trim() : '';
+        const extraCount = kwList.length - 1;
+        const kwChips = firstKw 
+          ? `<span class="ad-keyword-chip" title="${escapeHtmlAds(firstKw)}">${escapeHtmlAds(firstKw)}</span>`
+            + (extraCount > 0 ? ` <span class="ad-keyword-chip-plus" style="display:inline-block; font-size:10px; font-weight:600; padding:2px 5px; border-radius:3px; background:rgba(255,255,255,0.06); color:var(--text-secondary); cursor:pointer;" title="Mais ${extraCount} palavra(s)-chave">+${extraCount}</span>` : '')
+          : '';
 
         const pcuVal = ad.data_pcu || '';
         const rwVal = ad.data_rw || '';
@@ -219,6 +224,13 @@ function renderAdsTable() {
                       title="Ver todos os títulos (${titles.length})" 
                       style="padding:2px 6px; font-size:11px; display:inline-flex; align-items:center; gap:4px; cursor:pointer;">
                 📋 Info (${titles.length})
+              </button>
+              <button class="ad-keywords-btn toolbar-btn" 
+                      data-domain="${escapeHtmlAds(ad.display_url)}" 
+                      data-keywords="${escapeHtmlAds(kwList.join(','))}" 
+                      title="Ver todas as palavras-chave (${kwList.length})" 
+                      style="padding:2px 6px; font-size:11px; display:inline-flex; align-items:center; gap:4px; cursor:pointer;">
+                🔑 Keywords (${kwList.length})
               </button>
             </div>
             ${ad.ad_description ? `<div class="ad-desc-cell">${escapeHtmlAds(truncate(ad.ad_description, 70))}</div>` : ''}
@@ -514,6 +526,72 @@ function setupEventListeners() {
 
 document.addEventListener('DOMContentLoaded', () => {
   initAdTitlesModal();
+  initAdKeywordsModal();
   setupEventListeners();
   loadAllAds();
+});
+
+// --- Modal de Keywords ---
+function openAdKeywordsModal(domain, keywordsString) {
+  const overlay = document.getElementById('adKeywordsModalOverlay');
+  const domainLabel = document.getElementById('adKeywordsDomainLabel');
+  const container = document.getElementById('adKeywordsListContainer');
+  if (!overlay || !domainLabel || !container) return;
+
+  domainLabel.textContent = domain;
+  container.innerHTML = '';
+
+  const keywords = keywordsString.split(',').map(k => k.trim()).filter(Boolean);
+  keywords.forEach(kw => {
+    const chip = document.createElement('span');
+    chip.className = 'ad-keyword-chip';
+    chip.style.margin = '0';
+    chip.textContent = kw;
+    container.appendChild(chip);
+  });
+
+  overlay.classList.add('visible');
+}
+
+function initAdKeywordsModal() {
+  const overlay = document.getElementById('adKeywordsModalOverlay');
+  const btnClose = document.getElementById('btnCloseAdKeywords');
+  const btnCloseOk = document.getElementById('btnCloseAdKeywordsOk');
+
+  if (!overlay) return;
+
+  function closeModal() {
+    overlay.classList.remove('visible');
+  }
+
+  btnClose?.addEventListener('click', closeModal);
+  btnCloseOk?.addEventListener('click', closeModal);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && overlay.classList.contains('visible')) closeModal();
+  });
+}
+
+// Registro de escuta global para cliques nos botões de keywords
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.ad-keywords-btn');
+  if (btn) {
+    const domain = btn.getAttribute('data-domain');
+    const keywords = btn.getAttribute('data-keywords');
+    openAdKeywordsModal(domain, keywords);
+    return;
+  }
+
+  // Badge "+X" na coluna de Keywords
+  const badge = e.target.closest('.ad-keyword-chip-plus');
+  if (badge) {
+    const row = badge.closest('tr');
+    const kwBtn = row ? row.querySelector('.ad-keywords-btn') : null;
+    if (kwBtn) {
+      kwBtn.click();
+    }
+    return;
+  }
 });

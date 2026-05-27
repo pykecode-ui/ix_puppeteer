@@ -239,6 +239,30 @@
     </div>
   </div>
 
+  <!-- Modal Keywords dos Anúncios (exibe todas as keywords de um domínio agrupadas) -->
+  <div id="adKeywordsModalOverlay" class="modal-overlay">
+    <div class="modal-dialog" style="max-width:520px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:18px;">🔑</span>
+          <span class="modal-title">Keywords Associadas</span>
+        </div>
+        <button class="modal-close-btn" id="btnCloseAdKeywords">✕</button>
+      </div>
+      <div class="modal-body" style="padding-top:10px;">
+        <div style="margin-bottom:12px;">
+          <strong id="adKeywordsDomainLabel" style="font-size:14px; color:var(--accent); word-break:break-all;">dominio.com.br</strong>
+        </div>
+        <div id="adKeywordsListContainer" style="display:flex; flex-wrap:wrap; gap:8px; max-height:300px; overflow-y:auto; padding: 4px 0;">
+          <!-- Keywords dinâmicas entrarão aqui como chips -->
+        </div>
+        <div style="display:flex; justify-content:flex-end; margin-top:16px;">
+          <button class="btn btn-secondary" id="btnCloseAdKeywordsOk" style="font-size:13px; padding:6px 18px;">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/socket.js"></script>
