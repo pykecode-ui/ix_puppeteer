@@ -184,10 +184,8 @@ function renderAdsTable() {
         const repClass = reps >= 5 ? 'rep-high' : reps >= 2 ? 'rep-mid' : 'rep-low';
         const kwList = (ad.keywords || ad.keyword || '').split(',').filter(Boolean);
         const firstKw = kwList[0] ? kwList[0].trim() : '';
-        const extraCount = kwList.length - 1;
         const kwChips = firstKw 
           ? `<span class="ad-keyword-chip" title="${escapeHtmlAds(firstKw)}">${escapeHtmlAds(firstKw)}</span>`
-            + (extraCount > 0 ? ` <span class="ad-keyword-chip-plus" style="display:inline-block; font-size:10px; font-weight:600; padding:2px 5px; border-radius:3px; background:rgba(255,255,255,0.06); color:var(--text-secondary); cursor:pointer;" title="Mais ${extraCount} palavra(s)-chave">+${extraCount}</span>` : '')
           : '';
 
         const pcuVal = ad.data_pcu || '';
@@ -567,17 +565,6 @@ document.addEventListener('click', (e) => {
     const domain = btn.getAttribute('data-domain');
     const keywords = btn.getAttribute('data-keywords');
     openAdKeywordsModal(domain, keywords);
-    return;
-  }
-
-  // Badge "+X" na coluna de Keywords
-  const badge = e.target.closest('.ad-keyword-chip-plus');
-  if (badge) {
-    const row = badge.closest('tr');
-    const kwBtn = row ? row.querySelector('.ad-keywords-btn') : null;
-    if (kwBtn) {
-      kwBtn.click();
-    }
     return;
   }
 });
