@@ -27,6 +27,7 @@ const {
 } = require('./google-search');
 const { CaptchaSolver } = require('./captcha-solver');
 const puppeteerBot = require('./puppeteer');
+const client = require('../api/dashboard-client');
 
 /**
  * Cria cliente HTTP para o dashboard.
@@ -493,12 +494,13 @@ class SearchWorker {
       }
       const { page } = session;
 
-      // 4. Busca configurações do perfil (click_enabled, click_count, delays)
+      // 4. Busca configurações do perfil (click_enabled, click_count, delays, last_keyword_index)
       let clickEnabled = 0;
       let clickCountMax = 3;
       let clickMinDelay = 4;
       let clickMaxDelay = 8;
       let humanClick = 0;
+      let lastKeywordIndex = 0;
       try {
         const profRes = await this.http.get(`/api/profiles/${this.profileId}`);
         if (profRes.data?.ok && profRes.data.profile) {
@@ -507,9 +509,10 @@ class SearchWorker {
           clickMinDelay = profRes.data.profile.click_min_delay !== undefined ? profRes.data.profile.click_min_delay : 4;
           clickMaxDelay = profRes.data.profile.click_max_delay !== undefined ? profRes.data.profile.click_max_delay : 8;
           humanClick = profRes.data.profile.human_click !== undefined ? profRes.data.profile.human_click : 0;
+          lastKeywordIndex = profRes.data.profile.last_keyword_index !== undefined ? profRes.data.profile.last_keyword_index : 0;
         }
       } catch (err) {
-        this.log(`[SearchWorker] ⚠️ Não foi possível obter configurações de cliques do perfil: ${err.message}`);
+        this.log(`[SearchWorker] ⚠️ Não foi possível obter configurações do perfil: ${err.message}`);
       }
       this.log(`[SearchWorker] 🖱️ Cliques em Blacklist: ${clickEnabled === 1 ? 'ATIVADO' : 'DESATIVADO'} (máximo ${clickCountMax} por palavra, delay ${clickMinDelay}-${clickMaxDelay}s, clique humano: ${humanClick === 1 ? 'ON' : 'OFF'})`);
 
@@ -531,7 +534,14 @@ class SearchWorker {
 
         this.log(`\n${'═'.repeat(20)} RODADA ${round}/${this.rounds} ${'═'.repeat(20)}`);
 
-        for (let i = 0; i < keywords.length; i++) {
+        let startIndex = 0;
+        if (lastKeywordIndex > 0 && lastKeywordIndex < keywords.length) {
+          startIndex = lastKeywordIndex;
+          this.log(`[SearchWorker] 🔄 Retomando execução a partir da palavra #${startIndex + 1}: "${keywords[startIndex]}"`);
+          summary.keywordsDone = startIndex;
+        }
+
+        for (let i = startIndex; i < keywords.length; i++) {
           if (this._cancelled) break;
 
           const keyword = keywords[i];
@@ -562,6 +572,13 @@ class SearchWorker {
             }
           }
 
+          // Salva progresso da próxima palavra
+          if (!this._cancelled) {
+            try {
+              await client.updateSearchProgress(this.profileId, i + 1);
+            } catch (_) {}
+          }
+
           // Pausa entre keywords (simula humano)
           if (i < keywords.length - 1 && !this._cancelled) {
             await humanSleep(this.pauseBetweenKeywordsMin, this.pauseBetweenKeywordsMax);
@@ -576,6 +593,13 @@ class SearchWorker {
           this.log(`[SearchWorker] ⏳ Pausa de ${this.pauseBetweenRounds}s antes da próxima rodada…`);
           await humanSleep(this.pauseBetweenRounds * 0.9, this.pauseBetweenRounds * 1.1);
         }
+      }
+
+      // Se concluiu todas as palavras sem cancelamento, limpa o progresso (índice 0)
+      if (!this._cancelled) {
+        try {
+          await client.updateSearchProgress(this.profileId, 0);
+        } catch (_) {}
       }
 
       summary.status = this._cancelled ? 'cancelled' : 'completed';

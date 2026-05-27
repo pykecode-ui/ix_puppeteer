@@ -515,6 +515,18 @@ function updateIxProfileClickConfig(profileId, clickEnabled, clickCount, clickMi
 }
 
 /**
+ * Atualiza o progresso de pesquisa de um perfil (índice da última palavra).
+ * @param {number} profileId
+ * @param {number} lastKeywordIndex
+ */
+function updateIxProfileSearchProgress(profileId, lastKeywordIndex) {
+  const now = nowBrasilia();
+  getDB()
+    .prepare('UPDATE ix_profiles SET last_keyword_index = ?, updated_at = ? WHERE profile_id = ?')
+    .run(lastKeywordIndex, now, profileId);
+}
+
+/**
  * Remove um perfil global do cadastro (e suas atribuições em cascade).
  * @param {number} profileId
  */
@@ -800,6 +812,7 @@ module.exports = {
   incrementIxProfileOpenCount,
   updateIxProfileLoopConfig,
   updateIxProfileClickConfig,
+  updateIxProfileSearchProgress,
   // Bot profile assignments
   getBotProfileAssignments,
   setBotProfileAssignments,

@@ -231,6 +231,31 @@ function createProfilesRouter(io) {
     }
   });
 
+  // ─── PUT /api/profiles/:profileId/search-progress ──────────────────────────
+  // Atualiza o índice da última palavra-chave processada.
+  router.put('/profiles/:profileId/search-progress', (req, res) => {
+    try {
+      const pid = parseInt(req.params.profileId);
+      const { lastKeywordIndex } = req.body;
+
+      const existing = models.getIxProfile(pid);
+      if (!existing) return res.status(404).json({ ok: false, error: 'Perfil não encontrado.' });
+
+      const idx = parseInt(lastKeywordIndex);
+      if (isNaN(idx) || idx < 0) {
+        return res.status(400).json({ ok: false, error: 'lastKeywordIndex deve ser um número inteiro maior ou igual a 0.' });
+      }
+
+      models.updateIxProfileSearchProgress(pid, idx);
+
+      // Notifica o dashboard em tempo real
+      io.emit('profiles:updated', { profiles: models.getAllIxProfiles() });
+      return res.json({ ok: true, message: 'Progresso de pesquisa atualizado com sucesso.' });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
   // ─── DELETE /api/profiles/:profileId ─────────────────────────────────────
   router.delete('/profiles/:profileId', (req, res) => {
     try {

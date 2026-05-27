@@ -291,6 +291,20 @@ function disconnect() {
   }
 }
 
+/**
+ * Atualiza o índice da última palavra-chave pesquisada para o perfil no dashboard.
+ * @param {number|string} profileId
+ * @param {number} lastKeywordIndex
+ */
+async function updateSearchProgress(profileId, lastKeywordIndex) {
+  try {
+    await http.put(`/api/profiles/${profileId}/search-progress`, { lastKeywordIndex });
+  } catch (err) {
+    const msg = err.response?.data?.error || err.message;
+    console.error(`[DashboardClient] Falha ao atualizar progresso de pesquisa do perfil #${profileId}: ${msg}`);
+  }
+}
+
 module.exports = {
   register,
   connectSocket,
@@ -299,6 +313,7 @@ module.exports = {
   sendRunState,
   notifyProfileOpen,
   getProfile,
+  updateSearchProgress,
   sendOffline,
   startHeartbeat,
   stopHeartbeat,
