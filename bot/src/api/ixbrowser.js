@@ -57,8 +57,14 @@ async function _doCallAPI(endpoint, body, attempt, options) {
 
     if (data.error && data.error.code !== 0) {
       // Se a API retornar um erro interno que parece erro de rede, podemos retentar
-      if (data.error.code === 'ECONNRESET' && attempt < RETRY_ATTEMPTS) {
-        if (!options.silent) console.warn(`[ixBrowser] Erro interno da API (ECONNRESET) — tentativa ${attempt}/${RETRY_ATTEMPTS}...`);
+      const isRetryableError = 
+        data.error.code === 'ECONNRESET' || 
+        data.error.code === 1004 || 
+        data.error.code === '1004' ||
+        (data.error.message && data.error.message.includes('ECONNRESET'));
+
+      if (isRetryableError && attempt < RETRY_ATTEMPTS) {
+        if (!options.silent) console.warn(`[ixBrowser] Erro interno da API (código ${data.error.code}) — tentativa ${attempt}/${RETRY_ATTEMPTS}...`);
         await sleep(RETRY_DELAY_MS);
         return _doCallAPI(endpoint, body, attempt + 1, options);
       }
