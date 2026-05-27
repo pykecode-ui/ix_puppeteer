@@ -92,12 +92,28 @@ async function _doCallAPI(endpoint, body, attempt, options) {
 }
 
 /**
- * Abre um perfil pelo ID.
+ * Abre um perfil pelo ID, com suporte opcional a limpeza de cache e cookies
+ * e uso de fingerprint aleatório.
  * @param {number|string} profileId
+ * @param {boolean} cleanCache
+ * @param {boolean} randomFp
  * @returns {Promise<{ws: string, debugging_address: string, profile_id: number}>}
  */
-async function openProfile(profileId) {
-  const result = await callAPI('/api/v2/profile-open', {
+async function openProfile(profileId, cleanCache = false, randomFp = false) {
+  if (cleanCache) {
+    try {
+      await callAPI('/api/v2/profile-clear-cache-and-cookies', {
+        profile_id: [Number(profileId)]
+      });
+      console.log(`[ixBrowser] Cache e cookies limpos com sucesso para o perfil #${profileId}.`);
+    } catch (err) {
+      console.warn(`[ixBrowser] Falha ao limpar cache/cookies para o perfil #${profileId}:`, err.message);
+    }
+  }
+
+  const endpoint = randomFp ? '/api/v2/profile-open-with-random-fingerprint' : '/api/v2/profile-open';
+
+  const result = await callAPI(endpoint, {
     profile_id: Number(profileId),
     load_profile_info_page: true,
     load_extensions: true

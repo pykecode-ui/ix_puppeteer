@@ -459,16 +459,18 @@ function updateIxProfile(profileId, name, notes, deviceType = 'desktop', browser
 }
 
 /**
- * Atualiza as configurações de repetição (loop) de um perfil global.
+ * Atualiza as configurações de repetição (loop) e gerais de um perfil global.
  * @param {number} profileId
  * @param {number} loopCount
  * @param {number} infiniteLoop
+ * @param {number} cleanCache
+ * @param {number} randomFp
  */
-function updateIxProfileLoopConfig(profileId, loopCount, infiniteLoop) {
+function updateIxProfileLoopConfig(profileId, loopCount, infiniteLoop, cleanCache = 0, randomFp = 0) {
   const now = nowBrasilia();
   getDB()
-    .prepare('UPDATE ix_profiles SET loop_count = ?, infinite_loop = ?, updated_at = ? WHERE profile_id = ?')
-    .run(loopCount, infiniteLoop, now, profileId);
+    .prepare('UPDATE ix_profiles SET loop_count = ?, infinite_loop = ?, clean_cache = ?, random_fp = ?, updated_at = ? WHERE profile_id = ?')
+    .run(loopCount, infiniteLoop, cleanCache, randomFp, now, profileId);
 }
 
 /**

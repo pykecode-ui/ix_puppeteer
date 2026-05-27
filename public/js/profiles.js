@@ -913,12 +913,17 @@ function openLoopConfigModal(profileId) {
   const infiniteCheckbox = document.getElementById('loopConfigInfinite');
   const countInput = document.getElementById('loopConfigCount');
   const countGroup = document.getElementById('loopConfigCountGroup');
+  const randomFpCheckbox = document.getElementById('loopConfigRandomFp');
+  const cleanCacheCheckbox = document.getElementById('loopConfigCleanCache');
 
   if (!overlay) return;
 
   label.textContent = `#${profileId} (${profile.name || 'Sem Nome'})`;
   infiniteCheckbox.checked = !!profile.infinite_loop;
   countInput.value = profile.loop_count !== undefined ? profile.loop_count : 1;
+
+  if (randomFpCheckbox) randomFpCheckbox.checked = !!profile.random_fp;
+  if (cleanCacheCheckbox) cleanCacheCheckbox.checked = !!profile.clean_cache;
 
   if (infiniteCheckbox.checked) {
     countGroup.style.display = 'none';
@@ -946,6 +951,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const overlay = document.getElementById('loopConfigOverlay');
   const infiniteCheckbox = document.getElementById('loopConfigInfinite');
   const countGroup = document.getElementById('loopConfigCountGroup');
+  const randomFpCheckbox = document.getElementById('loopConfigRandomFp');
+  const cleanCacheCheckbox = document.getElementById('loopConfigCleanCache');
 
   document.getElementById('loopConfigClose')?.addEventListener('click', closeLoopConfigModal);
   document.getElementById('loopConfigCancel')?.addEventListener('click', closeLoopConfigModal);
@@ -967,6 +974,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const isInfinite = infiniteCheckbox.checked;
     const loopCount = isInfinite ? 1 : parseInt(document.getElementById('loopConfigCount').value);
+    const randomFp = randomFpCheckbox ? (randomFpCheckbox.checked ? 1 : 0) : 0;
+    const cleanCache = cleanCacheCheckbox ? (cleanCacheCheckbox.checked ? 1 : 0) : 0;
 
     if (!isInfinite && (isNaN(loopCount) || loopCount < 1)) {
       showToastModerno('Por favor, insira um número válido de repetições (mínimo 1).', 'warning');
@@ -983,14 +992,16 @@ document.addEventListener('DOMContentLoaded', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           loop_count: loopCount,
-          infinite_loop: isInfinite ? 1 : 0
+          infinite_loop: isInfinite ? 1 : 0,
+          random_fp: randomFp,
+          clean_cache: cleanCache
         }),
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error);
 
       if (typeof showToast === 'function') {
-        showToast('online', `⚙️ Configuração de loop salva para o perfil #${profileId}!`, null);
+        showToast('online', `⚙️ Configurações gerais salvas para o perfil #${profileId}!`, null);
       }
       closeLoopConfigModal();
       await loadProfiles();

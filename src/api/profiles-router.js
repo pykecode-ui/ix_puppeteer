@@ -152,17 +152,19 @@ function createProfilesRouter(io) {
   });
 
   // ─── PUT /api/profiles/:profileId/loop-config ──────────────────────────────
-  // Atualiza as configurações de repetição (loop) de um perfil.
-  router.put('/profiles/:profileId/loop-config', (req, res) => {
+  // Atualiza as configurações de repetição (loop) e gerais de um perfil.
+  router.put('/api/profiles/:profileId/loop-config', (req, res) => {
     try {
       const pid = parseInt(req.params.profileId);
-      const { loop_count, infinite_loop } = req.body;
+      const { loop_count, infinite_loop, clean_cache, random_fp } = req.body;
 
       const existing = models.getIxProfile(pid);
       if (!existing) return res.status(404).json({ ok: false, error: 'Perfil não encontrado.' });
 
       const lc = parseInt(loop_count);
       const inf = parseInt(infinite_loop);
+      const cc = clean_cache !== undefined ? parseInt(clean_cache) : 0;
+      const rf = random_fp !== undefined ? parseInt(random_fp) : 0;
 
       if (isNaN(lc) || lc < 1) {
         return res.status(400).json({ ok: false, error: 'loop_count deve ser um número inteiro maior ou igual a 1.' });
@@ -170,12 +172,18 @@ function createProfilesRouter(io) {
       if (inf !== 0 && inf !== 1) {
         return res.status(400).json({ ok: false, error: 'infinite_loop deve ser 0 ou 1.' });
       }
+      if (cc !== 0 && cc !== 1) {
+        return res.status(400).json({ ok: false, error: 'clean_cache deve ser 0 ou 1.' });
+      }
+      if (rf !== 0 && rf !== 1) {
+        return res.status(400).json({ ok: false, error: 'random_fp deve ser 0 ou 1.' });
+      }
 
-      models.updateIxProfileLoopConfig(pid, lc, inf);
+      models.updateIxProfileLoopConfig(pid, lc, inf, cc, rf);
 
       // Notifica o dashboard em tempo real
       io.emit('profiles:updated', { profiles: models.getAllIxProfiles() });
-      return res.json({ ok: true, message: 'Configurações de repetição atualizadas com sucesso.' });
+      return res.json({ ok: true, message: 'Configurações gerais do perfil atualizadas com sucesso.' });
     } catch (err) {
       return res.status(500).json({ ok: false, error: err.message });
     }

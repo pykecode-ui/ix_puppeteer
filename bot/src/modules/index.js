@@ -245,13 +245,29 @@ const COMMANDS = {
   async open_profile({ profileId }) {
     if (!profileId) throw new Error('profileId é obrigatório para open_profile.');
 
+    // 1. Busca configurações extras do perfil no dashboard (clean_cache e random_fp)
+    let cleanCache = false;
+    let randomFp = false;
+    try {
+      const profile = await client.getProfile(profileId);
+      if (profile) {
+        cleanCache = !!profile.clean_cache;
+        randomFp = !!profile.random_fp;
+        if (cleanCache || randomFp) {
+          log('info', `⚙️ Perfil #${profileId} possui configurações extras ativas: [Cache Limpo: ${cleanCache ? 'SIM' : 'NÃO'}, Fingerprint Novo: ${randomFp ? 'SIM' : 'NÃO'}]`);
+        }
+      }
+    } catch (err) {
+      log('warn', `⚠️ Não foi possível obter as configurações extras do perfil #${profileId} no dashboard. Usando padrões desativados. Erro: ${err.message}`);
+    }
+
     log('info', `🔓 Abrindo perfil #${profileId} no ixBrowser...`);
 
     // Notifica dashboard: abrindo
     client.sendStatus(BOT_ID, { profileId, status: 'opening' });
 
-    // 1. Chama API do ixBrowser para abrir o perfil
-    const profileData = await ixbrowser.openProfile(profileId);
+    // 2. Chama API do ixBrowser para abrir o perfil
+    const profileData = await ixbrowser.openProfile(profileId, cleanCache, randomFp);
     log('success', `✅ Perfil #${profileId} aberto. WebSocket: ${profileData.ws}`);
 
     // 2. Registra abertura no dashboard (incrementa open_count)

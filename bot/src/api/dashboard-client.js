@@ -178,6 +178,19 @@ async function notifyProfileOpen(profileId) {
   }
 }
 
+/**
+ * Busca informações e configurações de um perfil do ixBrowser no dashboard.
+ * @param {number|string} profileId
+ * @returns {Promise<object>}
+ */
+async function getProfile(profileId) {
+  const res = await http.get(`/api/profiles/${profileId}`);
+  if (!res.data || !res.data.ok) {
+    throw new Error(res.data?.error || 'Erro ao buscar perfil no dashboard');
+  }
+  return res.data.profile;
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // HEARTBEAT
 // ══════════════════════════════════════════════════════════════════════════════
@@ -285,6 +298,7 @@ module.exports = {
   sendStatus,
   sendRunState,
   notifyProfileOpen,
+  getProfile,
   sendOffline,
   startHeartbeat,
   stopHeartbeat,
