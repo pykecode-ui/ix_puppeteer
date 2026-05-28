@@ -232,6 +232,19 @@ async function runProfileLoop(profileId, http) {
   } catch (err) {
     log('error', `❌ Erro no loop de repetição do perfil #${profileId}: ${err.message}`);
   } finally {
+    // Garante que se o loop finalizar por cancelamento ou erro, o perfil seja fechado e o Puppeteer desconectado
+    try {
+      const session = puppeteerBot.getProfileSession(profileId);
+      if (session) {
+        log('info', `🔒 Perfil #${profileId}: Loop finalizado. Garantindo fechamento físico do perfil...`);
+        await puppeteerBot.disconnectProfile(profileId);
+        await ixbrowser.closeProfile(profileId);
+        client.sendStatus(BOT_ID, { profileId, status: 'closed' });
+      }
+    } catch (cleanErr) {
+      log('warn', `⚠️ Erro ao garantir fechamento do perfil #${profileId} no encerramento do loop: ${cleanErr.message}`);
+    }
+
     // Só deleta do Map se o loop que está no Map for este loopState atual!
     if (global._profileLoops && global._profileLoops.get(profileId) === loopState) {
       global._profileLoops.delete(profileId);
@@ -370,23 +383,39 @@ const COMMANDS = {
    * payload: {}
    */
   async close_all_profiles() {
-    log('warn', '⚠️ Buscando todos os perfis abertos no ixBrowser para fechar...');
-    let opened = [];
+    log('warn', '⚠️ Buscando todos os perfis abertos para fechar...');
+    
+    // Obtém perfis pela API do ixBrowser
+    let ixOpened = [];
     try {
-      opened = await ixbrowser.listOpenedProfiles();
+      ixOpened = await ixbrowser.listOpenedProfiles();
     } catch (err) {
       log('error', `Erro ao listar perfis abertos no ixBrowser: ${err.message}`);
-      // Fallback para os perfis rastreados pelo Puppeteer
-      opened = puppeteerBot.getActiveProfiles().map(p => ({ profile_id: p.profileId }));
     }
+    if (!Array.isArray(ixOpened)) ixOpened = [];
 
-    if (!Array.isArray(opened)) opened = [];
+    // Obtém perfis ativos rastreados pelo Puppeteer localmente
+    const localOpened = puppeteerBot.getActiveProfiles();
 
-    log('info', `Encontrados ${opened.length} perfis abertos no ixBrowser. Fechando todos...`);
+    // Cria um Set único de IDs de perfis
+    const uniqueProfileIds = new Set();
+    
+    ixOpened.forEach(item => {
+      if (item && item.profile_id) {
+        uniqueProfileIds.add(Number(item.profile_id));
+      }
+    });
+    
+    localOpened.forEach(p => {
+      if (p && p.profileId) {
+        uniqueProfileIds.add(Number(p.profileId));
+      }
+    });
+
+    log('info', `Encontrados ${uniqueProfileIds.size} perfil(is) ativo(s) (ixBrowser + Puppeteer). Fechando todos...`);
 
     let closedCount = 0;
-    for (const item of opened) {
-      const profileId = item.profile_id;
+    for (const profileId of uniqueProfileIds) {
       try {
         await COMMANDS.close_profile({ profileId });
         closedCount++;
