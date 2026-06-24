@@ -383,36 +383,29 @@ const COMMANDS = {
    * payload: {}
    */
   async close_all_profiles() {
-    log('warn', '⚠️ Buscando todos os perfis abertos para fechar...');
+    log('warn', '⚠️ Buscando perfis controlados pelo bot para fechar...');
     
-    // Obtém perfis pela API do ixBrowser
-    let ixOpened = [];
-    try {
-      ixOpened = await ixbrowser.listOpenedProfiles();
-    } catch (err) {
-      log('error', `Erro ao listar perfis abertos no ixBrowser: ${err.message}`);
-    }
-    if (!Array.isArray(ixOpened)) ixOpened = [];
-
     // Obtém perfis ativos rastreados pelo Puppeteer localmente
     const localOpened = puppeteerBot.getActiveProfiles();
 
     // Cria um Set único de IDs de perfis
     const uniqueProfileIds = new Set();
     
-    ixOpened.forEach(item => {
-      if (item && item.profile_id) {
-        uniqueProfileIds.add(Number(item.profile_id));
+    // Adiciona IDs dos loops de repetição ativos do bot
+    if (global._profileLoops) {
+      for (const profileId of global._profileLoops.keys()) {
+        uniqueProfileIds.add(Number(profileId));
       }
-    });
+    }
     
+    // Adiciona IDs das conexões Puppeteer ativas do bot
     localOpened.forEach(p => {
       if (p && p.profileId) {
         uniqueProfileIds.add(Number(p.profileId));
       }
     });
 
-    log('info', `Encontrados ${uniqueProfileIds.size} perfil(is) ativo(s) (ixBrowser + Puppeteer). Fechando todos...`);
+    log('info', `Encontrados ${uniqueProfileIds.size} perfil(is) ativo(s) controlados pelo bot. Fechando...`);
 
     let closedCount = 0;
     for (const profileId of uniqueProfileIds) {

@@ -353,11 +353,17 @@ class SearchWorker {
 
   /**
    * Clica em um anúncio físico na página usando Puppeteer e abre em nova aba.
-   * Fecha a aba após a simulação de permanência (customizável).
+   * Suporta dispositivos móveis (contornando isolamento de abas via browser.newPage).
+   * Fecha a aba (ou retorna a página) após a simulação de permanência.
    */
   async clickAdOnPage(page, ad, clickMinDelay = 4, clickMaxDelay = 8, humanClick = 0) {
     try {
       const browser = page.browser();
+      
+      // Detecta se o perfil simula dispositivo móvel
+      const userAgent = await page.evaluate(() => navigator.userAgent).catch(() => '');
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+      
       const containers = await page.$$('div[data-text-ad="1"]');
       for (const container of containers) {
         // Extrai dados do contêiner atual no DOM
@@ -378,11 +384,7 @@ class SearchWorker {
 
         if (!adInfo) continue;
 
-        // Compara de forma tolerante se este contêiner no DOM é o mesmo anúncio 'ad' alvo:
-        // 1. Pelo hrefRaw original
-        // 2. Ou pelo displayUrl (domínio de exibição) se ambos possuírem
-        // 3. Ou pelo título do anúncio (ignorando caixa alta/baixa e espaços extras)
-        // 4. Ou pelo data-pcu original
+        // Compara se este contêiner é o mesmo anúncio
         const isMatch = adInfo.hrefRaw === ad.hrefRaw ||
           (adInfo.displayUrl && ad.displayUrl && adInfo.displayUrl.toLowerCase().includes(ad.displayUrl.toLowerCase())) ||
           (adInfo.adTitle && ad.adTitle && adInfo.adTitle.toLowerCase().trim() === ad.adTitle.toLowerCase().trim()) ||
@@ -391,21 +393,66 @@ class SearchWorker {
         if (isMatch) {
           const linkEl = await container.$('a[data-pcu]') || await container.$('a[href]');
           if (linkEl) {
-            // Prepara a promessa para capturar a nova aba
-            const newPagePromise = new Promise(resolve => {
-              const listener = async (target) => {
-                if (target.type() === 'page') {
-                  const p = await target.page();
-                  browser.off('targetcreated', listener);
-                  resolve(p);
+            // Obtém prioritariamente o link do redirecionador do Google (data-rw, data-pcu ou href)
+            let href = await page.evaluate(el => {
+              const hrefAttr = el.getAttribute('href') || '';
+              const rwAttr = el.getAttribute('data-rw') || '';
+              const pcuAttr = el.getAttribute('data-pcu') || '';
+              
+              // Se data-rw ou data-pcu contiverem link de redirecionamento do Google (/aclk ou /url), prefere-os
+              if (rwAttr.includes('/aclk') || rwAttr.includes('/url')) return rwAttr;
+              if (pcuAttr.includes('/aclk') || pcuAttr.includes('/url')) return pcuAttr;
+              if (hrefAttr.includes('/aclk') || hrefAttr.includes('/url')) return hrefAttr;
+              
+              // Fallback na ordem
+              return hrefAttr || rwAttr || pcuAttr;
+            }, linkEl).catch(() => '');
+            
+            // --- ESTRATÉGIA MOBILE: Abertura manual para contornar isolamento do ixBrowser ---
+            if (isMobile && href) {
+              if (!href.startsWith('http')) {
+                href = new URL(href, page.url()).toString();
+              }
+              
+              let newPage = null;
+              try {
+                this.log(`[SearchWorker] 📱 Perfil Android detectado. Abrindo link do anúncio programaticamente em nova aba para contornar isolamento: ${href.slice(0, 80)}...`);
+                newPage = await browser.newPage();
+                
+                // Sincroniza User-Agent e Viewport com o perfil
+                if (userAgent) {
+                  await newPage.setUserAgent(userAgent);
                 }
-              };
-              browser.on('targetcreated', listener);
-              setTimeout(() => {
-                browser.off('targetcreated', listener);
-                resolve(null);
-              }, 12000);
-            });
+                const viewport = page.viewport();
+                if (viewport) {
+                  await newPage.setViewport(viewport);
+                }
+                
+                // Navega na nova aba para disparar redirecionamento e registrar o clique legítimo
+                await newPage.goto(href, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                this.log(`[SearchWorker] 🖱️ Clique registrado. Carregado site do anunciante: ${newPage.url().slice(0, 80)}...`);
+                
+                // Simula permanência
+                await humanSleep(clickMinDelay, clickMaxDelay);
+                
+                // Fecha a nova aba
+                await newPage.close().catch(() => {});
+                this.log(`[SearchWorker] 🔒 Nova aba do anúncio fechada.`);
+                return true;
+              } catch (err) {
+                this.log(`[SearchWorker] ⚠️ Falha ao abrir aba programaticamente: ${err.message}. Tentando clique convencional.`);
+                if (newPage) {
+                  await newPage.close().catch(() => {});
+                }
+                // Fallback para o clique convencional abaixo
+              }
+            }
+
+            // --- ESTRATÉGIA DESKTOP/FALLBACK: Clique Físico Convencional ---
+            
+            // Salva as páginas abertas e a URL original antes do clique
+            const pagesBefore = await browser.pages().catch(() => []);
+            const urlBefore = page.url();
 
             // Força abrir em nova aba alterando o target
             await linkEl.evaluate(a => a.setAttribute('target', '_blank'));
@@ -437,7 +484,7 @@ class SearchWorker {
                   await linkEl.click();
                 }
               } catch (err) {
-                this.log(`[SearchWorker] ⚠️ Falha na movimentação do mouse, usando clique direto: ${err.message}`);
+                this.log(`[SearchWorker] ⚠️ Falha na interação física, usando clique direto: ${err.message}`);
                 await linkEl.click();
               }
             } else {
@@ -445,20 +492,54 @@ class SearchWorker {
               await linkEl.click();
             }
 
-            // Espera a aba abrir
-            const newPage = await newPagePromise;
-            if (newPage) {
-              this.log(`[SearchWorker] 🖱️ Clique efetuado. Aba aberta: ${newPage.url().slice(0, 80)}...`);
+            // Polling ativo para detectar se abriu nova aba ou navegou na mesma aba
+            let detectedNewPage = null;
+            let navigatedOnSameTab = false;
+            
+            this.log(`[SearchWorker] ⏳ Aguardando detecção da ação do clique...`);
+            
+            // Aguarda até 10 segundos
+            for (let attempt = 0; attempt < 20; attempt++) {
+              await humanSleep(0.5, 0.5);
               
-              // Simula permanência
+              // 1. Verifica se uma nova aba foi aberta no browser
+              try {
+                const currentPages = await browser.pages();
+                if (currentPages.length > pagesBefore.length) {
+                  detectedNewPage = currentPages[currentPages.length - 1];
+                  break;
+                }
+              } catch (e) {}
+              
+              // 2. Verifica se a URL da aba original mudou
+              try {
+                const currentUrl = page.url();
+                if (currentUrl !== urlBefore && !currentUrl.includes('google.com/search')) {
+                  navigatedOnSameTab = true;
+                  break;
+                }
+              } catch (e) {}
+            }
+
+            if (detectedNewPage) {
+              this.log(`[SearchWorker] 🖱️ Clique efetuado. Nova aba detectada: ${detectedNewPage.url().slice(0, 80)}...`);
               await humanSleep(clickMinDelay, clickMaxDelay);
-              
-              // Fecha a aba
-              await newPage.close();
-              this.log(`[SearchWorker] 🔒 Aba do anúncio fechada.`);
+              await detectedNewPage.close().catch(err => {
+                this.log(`[SearchWorker] ⚠️ Erro ao fechar nova aba: ${err.message}`);
+              });
+              this.log(`[SearchWorker] 🔒 Nova aba do anúncio fechada.`);
+              return true;
+            } else if (navigatedOnSameTab) {
+              this.log(`[SearchWorker] 🖱️ Clique efetuado. Navegou na mesma aba para: ${page.url().slice(0, 80)}...`);
+              await humanSleep(clickMinDelay, clickMaxDelay);
+              this.log(`[SearchWorker] 🔙 Retornando para a página de pesquisa anterior (goBack)...`);
+              await page.goBack({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(err => {
+                this.log(`[SearchWorker] ⚠️ Erro ao voltar para a página de pesquisa: ${err.message}`);
+              });
+              this.log(`[SearchWorker] 🔙 Retornado à página de busca. URL atual: ${page.url().slice(0, 80)}...`);
               return true;
             } else {
-              this.log(`[SearchWorker] ⚠️ Clique efetuado, mas a nova aba não foi detectada.`);
+              this.log(`[SearchWorker] ⚠️ Clique efetuado, mas nenhuma navegação ou nova aba foi detectada.`);
             }
           }
         }
