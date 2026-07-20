@@ -214,7 +214,7 @@ class SearchWorker {
    * @param {object} rules - { whitelist, blacklist }
    * @returns {Promise<object>} Resultado da execução
    */
-  async searchKeyword(page, keyword, rules, clickEnabled = 0, clickCountMax = 3, clickMinDelay = 4, clickMaxDelay = 8, humanClick = 0) {
+  async searchKeyword(page, keyword, rules, clickEnabled = 0, clickCountMax = 3, clickMinDelay = 4, clickMaxDelay = 8, humanClick = 0, maxPages = 3) {
     const startTime = Date.now();
     const result = {
       keyword,
@@ -230,19 +230,47 @@ class SearchWorker {
     };
 
     try {
-      // Pesquisa no Google
-      await doGoogleSearch(page, keyword, {
-        captchaSolver: this.captchaSolver,
-        log: this.log,
-        method: this.searchMethod,
-        profileId: this.profileId,
-      });
+      // Importa a função de avançar página
+      const { goToNextPage } = require('./google-search');
 
-      // Captura URL da SERP
-      result.serpUrl = page.url();
+      let currentPage = 1;
+      let ads = [];
 
-      // Colhe anúncios
-      const ads = await harvestSerpAds(page, this.log);
+      while (currentPage <= maxPages) {
+        this.log(`[SearchWorker] 📄 Processando página ${currentPage} de resultados (limite: ${maxPages})...`);
+
+        if (currentPage === 1) {
+          // Pesquisa inicial na página 1
+          await doGoogleSearch(page, keyword, {
+            captchaSolver: this.captchaSolver,
+            log: this.log,
+            method: this.searchMethod,
+            profileId: this.profileId,
+          });
+          result.serpUrl = page.url();
+        } else {
+          // Avança para a próxima página (Mobile ou Desktop)
+          const paginou = await goToNextPage(page, this.log);
+          if (!paginou) {
+            this.log('[SearchWorker] Fim das páginas de resultados ou botão de paginação não localizado.');
+            break;
+          }
+        }
+
+        // Colhe anúncios desta página
+        const pageAds = await harvestSerpAds(page, this.log);
+        this.log(`[SearchWorker] Encontrados ${pageAds.length} anúncio(s) na página ${currentPage}.`);
+
+        for (const ad of pageAds) {
+          // Evita duplicatas se a página redesenhar anúncios anteriores
+          if (!ads.some((existing) => existing.href === ad.href)) {
+            ads.push(ad);
+          }
+        }
+
+        currentPage++;
+      }
+
       result.adsFound = ads.length;
 
       // Processa cada anúncio contra as regras
@@ -596,6 +624,7 @@ class SearchWorker {
       let clickMaxDelay = 8;
       let humanClick = 0;
       let lastKeywordIndex = 0;
+      let maxPages = 3;
       try {
         const profRes = await this.http.get(`/api/profiles/${this.profileId}`);
         if (profRes.data?.ok && profRes.data.profile) {
@@ -605,6 +634,7 @@ class SearchWorker {
           clickMaxDelay = profRes.data.profile.click_max_delay !== undefined ? profRes.data.profile.click_max_delay : 8;
           humanClick = profRes.data.profile.human_click !== undefined ? profRes.data.profile.human_click : 0;
           lastKeywordIndex = profRes.data.profile.last_keyword_index !== undefined ? profRes.data.profile.last_keyword_index : 0;
+          maxPages = profRes.data.profile.max_pages !== undefined ? profRes.data.profile.max_pages : 3;
         }
       } catch (err) {
         this.log(`[SearchWorker] ⚠️ Não foi possível obter configurações do perfil: ${err.message}`);
@@ -644,7 +674,7 @@ class SearchWorker {
           this.log(`\n[R${round}/${this.rounds} · ${i + 1}/${keywords.length}] 🔎 "${keyword}"`);
 
           // Pesquisa a keyword
-          const result = await this.searchKeyword(page, keyword, rules, clickEnabled, clickCountMax, clickMinDelay, clickMaxDelay, humanClick);
+          const result = await this.searchKeyword(page, keyword, rules, clickEnabled, clickCountMax, clickMinDelay, clickMaxDelay, humanClick, maxPages);
           summary.results.push(result);
           summary.keywordsDone++;
           summary.totalAdsFound += result.adsFound;

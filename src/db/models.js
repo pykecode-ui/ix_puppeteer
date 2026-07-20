@@ -491,11 +491,11 @@ function updateIxProfile(profileId, name, notes, deviceType = 'desktop', browser
  * @param {number} cleanCache
  * @param {number} randomFp
  */
-function updateIxProfileLoopConfig(profileId, loopCount, infiniteLoop, cleanCache = 0, randomFp = 0) {
+function updateIxProfileLoopConfig(profileId, loopCount, infiniteLoop, cleanCache = 0, randomFp = 0, maxPages = 3) {
   const now = nowBrasilia();
   getDB()
-    .prepare('UPDATE ix_profiles SET loop_count = ?, infinite_loop = ?, clean_cache = ?, random_fp = ?, updated_at = ? WHERE profile_id = ?')
-    .run(loopCount, infiniteLoop, cleanCache, randomFp, now, profileId);
+    .prepare('UPDATE ix_profiles SET loop_count = ?, infinite_loop = ?, clean_cache = ?, random_fp = ?, max_pages = ?, updated_at = ? WHERE profile_id = ?')
+    .run(loopCount, infiniteLoop, cleanCache, randomFp, maxPages, now, profileId);
 }
 
 /**

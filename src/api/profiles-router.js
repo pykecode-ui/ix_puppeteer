@@ -156,7 +156,7 @@ function createProfilesRouter(io) {
   router.put('/profiles/:profileId/loop-config', (req, res) => {
     try {
       const pid = parseInt(req.params.profileId);
-      const { loop_count, infinite_loop, clean_cache, random_fp } = req.body;
+      const { loop_count, infinite_loop, clean_cache, random_fp, max_pages } = req.body;
 
       const existing = models.getIxProfile(pid);
       if (!existing) return res.status(404).json({ ok: false, error: 'Perfil não encontrado.' });
@@ -165,6 +165,7 @@ function createProfilesRouter(io) {
       const inf = parseInt(infinite_loop);
       const cc = clean_cache !== undefined ? parseInt(clean_cache) : 0;
       const rf = random_fp !== undefined ? parseInt(random_fp) : 0;
+      const mp = max_pages !== undefined ? parseInt(max_pages) : 3;
 
       if (isNaN(lc) || lc < 1) {
         return res.status(400).json({ ok: false, error: 'loop_count deve ser um número inteiro maior ou igual a 1.' });
@@ -178,8 +179,11 @@ function createProfilesRouter(io) {
       if (rf !== 0 && rf !== 1) {
         return res.status(400).json({ ok: false, error: 'random_fp deve ser 0 ou 1.' });
       }
+      if (isNaN(mp) || mp < 1 || mp > 5) {
+        return res.status(400).json({ ok: false, error: 'A quantidade máxima de páginas deve ser de 1 a 5.' });
+      }
 
-      models.updateIxProfileLoopConfig(pid, lc, inf, cc, rf);
+      models.updateIxProfileLoopConfig(pid, lc, inf, cc, rf, mp);
 
       // Notifica o dashboard em tempo real
       io.emit('profiles:updated', { profiles: models.getAllIxProfiles() });

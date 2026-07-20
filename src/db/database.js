@@ -149,6 +149,7 @@ function initDatabase() {
       random_fp         INTEGER NOT NULL DEFAULT 0,
       human_click       INTEGER NOT NULL DEFAULT 0,
       last_keyword_index INTEGER NOT NULL DEFAULT 0,
+      max_pages         INTEGER NOT NULL DEFAULT 3,
       created_at        TEXT    NOT NULL,
       updated_at        TEXT    NOT NULL
     )
@@ -170,6 +171,7 @@ function initDatabase() {
   try { db.exec(`ALTER TABLE ix_profiles ADD COLUMN random_fp INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
   try { db.exec(`ALTER TABLE ix_profiles ADD COLUMN human_click INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
   try { db.exec(`ALTER TABLE ix_profiles ADD COLUMN last_keyword_index INTEGER NOT NULL DEFAULT 0`); } catch (_) {}
+  try { db.exec(`ALTER TABLE ix_profiles ADD COLUMN max_pages INTEGER NOT NULL DEFAULT 3`); } catch (_) {}
   try { db.exec(`ALTER TABLE bots ADD COLUMN run_state TEXT NOT NULL DEFAULT 'idle'`); } catch (_) {}
 
   // Migration: geolocalização do IP nos perfis (país, estado, cidade)

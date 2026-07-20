@@ -594,6 +594,113 @@ async function harvestSerpAds(page, log = console.log) {
   return ads;
 }
 
+/**
+ * Avança para a próxima página de resultados de busca (Desktop ou Mobile).
+ * No Mobile, clica no botão "Mais resultados" e aguarda o carregamento dinâmico via Ajax.
+ * No Desktop, clica no botão "Próxima" (#pnnext) e aguarda o carregamento da nova página.
+ *
+ * @param {import('puppeteer-core').Page} page
+ * @param {function} log
+ * @returns {Promise<boolean>} Retorna true se conseguiu clicar e paginar com sucesso.
+ */
+async function goToNextPage(page, log = console.log) {
+  try {
+    const userAgent = await page.evaluate(() => navigator.userAgent).catch(() => '');
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+
+    if (isMobile) {
+      log('[Navegação] Detectado dispositivo móvel. Buscando botão "Mais resultados"…');
+
+      // Tenta localizar o botão "Mais resultados" via seletores do Google Mobile
+      const mobileSelectors = [
+        'a[data-extended-results]',
+        'button[data-extended-results]',
+        'a.q8s197', 
+        'div.zS514b',
+        'span.PNy8Zc'
+      ];
+
+      let buttonEl = null;
+
+      for (const sel of mobileSelectors) {
+        const el = await page.$(sel);
+        if (el) {
+          const visible = await el.evaluate(node => {
+            const style = window.getComputedStyle(node);
+            return style && style.display !== 'none' && style.visibility !== 'hidden' && node.offsetHeight > 0;
+          }).catch(() => false);
+          
+          if (visible) {
+            buttonEl = el;
+            log(`[Navegação] Botão de paginação mobile localizado via seletor: "${sel}"`);
+            break;
+          }
+        }
+      }
+
+      // Fallback: Busca textual em todos os botões/elementos clicáveis
+      if (!buttonEl) {
+        log('[Navegação] Seletores específicos não localizados. Buscando por texto ("Mais resultados" / "More results")…');
+        const elements = await page.$$('span, a, button, div[role="button"]');
+        for (const el of elements) {
+          const text = await page.evaluate(node => node.innerText, el).catch(() => '');
+          if (text) {
+            const cleanText = text.trim().toLowerCase();
+            if (cleanText === 'mais resultados' || cleanText === 'more results' || cleanText.includes('mais resultados')) {
+              const visible = await el.evaluate(node => {
+                const style = window.getComputedStyle(node);
+                return style && style.display !== 'none' && style.visibility !== 'hidden' && node.offsetHeight > 0;
+              }).catch(() => false);
+
+              if (visible) {
+                buttonEl = el;
+                log(`[Navegação] Botão de paginação mobile localizado via texto: "${text.trim()}"`);
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      if (buttonEl) {
+        log('[Navegação] Clicando no botão "Mais resultados"…');
+        await buttonEl.evaluate(el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })).catch(() => {});
+        await new Promise(r => setTimeout(r, 1000));
+        await buttonEl.click();
+        
+        // Aguarda estabilização do DOM/Ajax no Mobile (5 segundos)
+        log('[Navegação] Aguardando o carregamento dos novos resultados (Ajax)…');
+        await new Promise(r => setTimeout(r, 5000));
+        return true;
+      }
+
+      log('[Navegação] ⚠️ Botão "Mais resultados" não foi localizado ou não está visível na tela.');
+      return false;
+    } else {
+      log('[Navegação] Detectado desktop. Buscando botão "Próxima" (#pnnext)…');
+      const nextBtn = await page.$('#pnnext');
+      if (nextBtn) {
+        log('[Navegação] Clicando no botão de próxima página (#pnnext)…');
+        await nextBtn.evaluate(el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })).catch(() => {});
+        await new Promise(r => setTimeout(r, 1000));
+        
+        const navigationPromise = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => null);
+        await nextBtn.click();
+        await navigationPromise;
+        
+        // Aguarda marcadores da nova SERP
+        await waitSerpUrlOrMarkers(page, 10000);
+        return true;
+      }
+      log('[Navegação] ⚠️ Link de próxima página (#pnnext) não foi localizado.');
+      return false;
+    }
+  } catch (err) {
+    log(`[Navegação] ❌ Erro ao tentar avançar de página: ${err.message}`);
+    return false;
+  }
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // EXPORTS
 // ══════════════════════════════════════════════════════════════════════════════
@@ -605,6 +712,7 @@ module.exports = {
   isRecoverableError,
   // Navegação
   pageGotoRobust,
+  goToNextPage,
   // Esperas
   waitSearchBoxVisible,
   waitSerpMarkersAttached,

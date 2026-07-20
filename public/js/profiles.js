@@ -154,6 +154,11 @@ function renderProfilesTable() {
           <td class="dim-text">${p.created_at || '—'}</td>
           <td><div class="bot-link-badges">${botBadges}</div></td>
           <td style="text-align:center;">${openBadge}</td>
+          <td style="text-align:center;">
+            <span class="geo-badge geo-country" style="background:rgba(59,130,246,0.1); color:rgb(37,99,235); border:1px solid rgba(59,130,246,0.2); font-weight:500; font-size:11px; padding:3px 8px; border-radius:12px;">
+              📄 ${p.max_pages !== undefined ? p.max_pages : 3} pág.
+            </span>
+          </td>
           <td>
             <div class="profile-actions">
               <button type="button" class="toolbar-btn accent" onclick="openAssignBotModal(${p.profile_id})" title="Vincular a Bot">🔗 Vincular</button>
@@ -969,6 +974,7 @@ function openLoopConfigModal(profileId) {
   const countGroup = document.getElementById('loopConfigCountGroup');
   const randomFpCheckbox = document.getElementById('loopConfigRandomFp');
   const cleanCacheCheckbox = document.getElementById('loopConfigCleanCache');
+  const maxPagesSelect = document.getElementById('loopConfigMaxPages');
 
   if (!overlay) return;
 
@@ -978,6 +984,7 @@ function openLoopConfigModal(profileId) {
 
   if (randomFpCheckbox) randomFpCheckbox.checked = !!profile.random_fp;
   if (cleanCacheCheckbox) cleanCacheCheckbox.checked = !!profile.clean_cache;
+  if (maxPagesSelect) maxPagesSelect.value = profile.max_pages !== undefined ? profile.max_pages : 3;
 
   if (infiniteCheckbox.checked) {
     countGroup.style.display = 'none';
@@ -1030,6 +1037,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const loopCount = isInfinite ? 1 : parseInt(document.getElementById('loopConfigCount').value);
     const randomFp = randomFpCheckbox ? (randomFpCheckbox.checked ? 1 : 0) : 0;
     const cleanCache = cleanCacheCheckbox ? (cleanCacheCheckbox.checked ? 1 : 0) : 0;
+    const maxPagesSelect = document.getElementById('loopConfigMaxPages');
+    const maxPages = maxPagesSelect ? parseInt(maxPagesSelect.value) : 3;
 
     if (!isInfinite && (isNaN(loopCount) || loopCount < 1)) {
       showToastModerno('Por favor, insira um número válido de repetições (mínimo 1).', 'warning');
@@ -1048,7 +1057,8 @@ document.addEventListener('DOMContentLoaded', () => {
           loop_count: loopCount,
           infinite_loop: isInfinite ? 1 : 0,
           random_fp: randomFp,
-          clean_cache: cleanCache
+          clean_cache: cleanCache,
+          max_pages: maxPages
         }),
       });
       const data = await res.json();

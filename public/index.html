@@ -291,6 +291,7 @@
                     <th>Cadastrado em</th>
                     <th>Bots Vinculados</th>
                     <th>Aberturas</th>
+                    <th style="text-align:center;">Páginas Google</th>
                     <th>Ações</th>
                   </tr>
                 </thead>
@@ -834,6 +835,17 @@
             <input type="checkbox" id="loopConfigCleanCache" />
             <span class="slider"></span>
           </label>
+        </div>
+
+        <div class="profile-form-group" style="margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; border-top:1px solid var(--border); padding-top:16px;">
+          <span style="font-size:13px; font-weight:500; color:var(--text-primary);">Páginas Google (1 a 5)</span>
+          <select id="loopConfigMaxPages" class="modal-input" style="width: 80px; padding: 5px 8px; border-radius: 6px; border:1px solid var(--border); font-size: 13px; cursor: pointer; text-align: center; background: var(--bg-hover); color: var(--text-primary);">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3" selected>3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px;">
