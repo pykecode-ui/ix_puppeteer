@@ -37,9 +37,16 @@ module.exports = {
   // Delay entre tentativas de reconexão (ms)
   RECONNECT_DELAY_MS: 3000,
 
-  // ── 2Captcha (resolução automática de CAPTCHA) ─────────────────
-  // Chave API do 2Captcha para resolver reCAPTCHA automaticamente.
+  // ── Resolução Automática de CAPTCHA ────────────────────────────
+  // Chave API do 2Captcha ou Capsolver para resolver reCAPTCHA automaticamente.
+  // - Para 2Captcha: Insira a chave tradicional de 32 caracteres (ex: 'a5b86f...').
+  // - Para Capsolver: Insira a chave iniciando com 'CAP-' (ex: 'CAP-ABCD...').
   // Deixe vazio ('') para desativar — CAPTCHAs serão detectados mas não resolvidos.
-  // Crie sua conta em: https://2captcha.com
-  TWOCAPTCHA_API_KEY: '',
+  TWOCAPTCHA_API_KEY: 'CAP-742B0FD85614D5BF3DD3DE23BD446BBF',
+
+  // ── Credenciais de Proxy para Capsolver ──────────────────────────
+  // O Capsolver exige o uso do mesmo proxy do perfil para resolver captchas do Google Search.
+  // Como o ixBrowser oculta a senha do proxy por segurança, preencha o usuário e senha do seu provedor de proxy abaixo:
+  PROXY_USER: '67ce0f6bd3b1f71b40ec__cr.br;state.riograndedonorte',
+  PROXY_PASSWORD: 'd0b4e485c310b80a',
 };

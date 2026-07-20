@@ -235,6 +235,7 @@ class SearchWorker {
         captchaSolver: this.captchaSolver,
         log: this.log,
         method: this.searchMethod,
+        profileId: this.profileId,
       });
 
       // Captura URL da SERP
@@ -610,16 +611,17 @@ class SearchWorker {
       }
       this.log(`[SearchWorker] 🖱️ Cliques em Blacklist: ${clickEnabled === 1 ? 'ATIVADO' : 'DESATIVADO'} (máximo ${clickCountMax} por palavra, delay ${clickMinDelay}-${clickMaxDelay}s, clique humano: ${humanClick === 1 ? 'ON' : 'OFF'})`);
 
-      // 5. Exibe saldo do 2Captcha (se configurado)
+      // 5. Exibe saldo do Captcha (se configurado)
       if (this.captchaSolver.enabled) {
         const balance = await this.captchaSolver.getBalance();
+        const provider = this.captchaSolver.providerName || '2Captcha';
         if (balance !== null) {
-          this.log(`[Captcha] 💰 2Captcha ativo (saldo: $${balance.toFixed(2)})`);
+          this.log(`[Captcha] 💰 ${provider} ativo (saldo: $${balance.toFixed(2)})`);
         } else {
-          this.log('[Captcha] 🔑 2Captcha ativo (chave configurada)');
+          this.log(`[Captcha] 🔑 ${provider} ativo (chave configurada)`);
         }
       } else {
-        this.log('[Captcha] ℹ️ 2Captcha não configurado — CAPTCHAs serão detectados mas não resolvidos');
+        this.log('[Captcha] ℹ️ Resolvedor de CAPTCHA não configurado — CAPTCHAs serão detectados mas não resolvidos');
       }
 
       // 6. Loop de rodadas × keywords

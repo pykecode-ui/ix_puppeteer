@@ -341,7 +341,7 @@ async function searchDirectUrl(page, keyword, opts = {}) {
 
   // Detecta CAPTCHA (não bloqueia se não tiver solver)
   if (captchaSolver) {
-    await captchaSolver.trySolveIfPresent(page, log);
+    await captchaSolver.trySolveIfPresent(page, log, opts.profileId);
   }
 }
 
@@ -359,7 +359,7 @@ async function searchViaHomepage(page, keyword, opts = {}) {
 
   // Resolve CAPTCHA se aparecer
   if (captchaSolver) {
-    await captchaSolver.trySolveIfPresent(page, log);
+    await captchaSolver.trySolveIfPresent(page, log, opts.profileId);
   }
 
   // Aceita cookies
@@ -370,7 +370,7 @@ async function searchViaHomepage(page, keyword, opts = {}) {
 
   // Resolve CAPTCHA novamente
   if (captchaSolver) {
-    await captchaSolver.trySolveIfPresent(page, log);
+    await captchaSolver.trySolveIfPresent(page, log, opts.profileId);
   }
 
   // Preenche e submete

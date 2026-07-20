@@ -437,19 +437,8 @@ async function renderModalAssignments() {
     }
   } catch (_) {}
 
-  // Oculta perfis não vinculados conforme pedido do usuário
-  const assignedProfiles = profiles.filter(p => currentAssignments.includes(p.profile_id));
-
-  if (assignedProfiles.length === 0) {
-    container.innerHTML = `
-      <div class="profile-empty-state">
-        <div class="empty-icon">🔗</div>
-        <div class="empty-title">Nenhum perfil vinculado</div>
-        <div class="empty-desc">Vá até a aba <strong>Perfis</strong> e clique em <strong>Vincular a Bot</strong>.</div>
-      </div>`;
-    updateAssignmentsCount();
-    return;
-  }
+  // Mantém todos os perfis visíveis na tabela para permitir a ativação/desativação rápida
+  const assignedProfiles = profiles;
 
   // Carrega os vínculos perfil→módulo e a lista de módulos disponíveis
   let moduleLinksMap = {};
@@ -526,15 +515,20 @@ async function renderModalAssignments() {
 
           return `
           <tr class="${checked ? 'assign-row-active' : ''}">
-            <td style="text-align:center;">
-              <input
-                type="checkbox"
-                class="assignment-checkbox"
-                id="assign_${p.profile_id}"
-                value="${p.profile_id}"
-                ${checked ? 'checked' : ''}
-                style="accent-color:var(--accent); cursor:pointer; width:15px; height:15px;"
-              />
+            <td style="text-align:center; vertical-align:middle;">
+              <div style="display:flex; justify-content:center; align-items:center;">
+                <label class="module-toggle" title="${checked ? 'Desvincular perfil' : 'Vincular perfil'}">
+                  <input
+                    type="checkbox"
+                    class="assignment-checkbox"
+                    id="assign_${p.profile_id}"
+                    value="${p.profile_id}"
+                    ${checked ? 'checked' : ''}
+                    onchange="toggleProfileAssignment(${p.profile_id}, this.checked)"
+                  />
+                  <span class="slider"></span>
+                </label>
+              </div>
             </td>
             <td><span class="profile-id-badge">#${p.profile_id}</span></td>
             <td style="text-align:center;">${statusBadge}</td>
@@ -659,6 +653,66 @@ function setupProfileAssignmentsModal() {
     }
   });
 }
+
+/**
+ * Salva a atribuição de um perfil individual instantaneamente ao alternar o Toggle Switch.
+ */
+async function toggleProfileAssignment(profileId, isChecked) {
+  const botId = window._activeBotModal;
+  if (!botId) {
+    showToastModerno('Nenhum bot ativo selecionado para atribuição.', 'error');
+    return;
+  }
+
+  // Prepara a lista atualizada de atribuições de perfis para este bot
+  let currentAssignments = [...(profilesState.assignments[botId] || [])];
+  if (isChecked) {
+    if (!currentAssignments.includes(profileId)) {
+      currentAssignments.push(profileId);
+    }
+  } else {
+    currentAssignments = currentAssignments.filter(id => id !== profileId);
+  }
+
+  // Desativa temporariamente o refresh visual para evitar conflitos de re-render enquanto fazemos a requisição
+  profilesState._isBusy = true;
+
+  try {
+    const res = await fetch(`/api/bots/${botId}/assignments`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profileIds: currentAssignments }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+
+    // Atualiza o estado na memória
+    profilesState.assignments[botId] = currentAssignments;
+    updateProfileStats();
+    updateAssignmentsCount();
+
+    // Aplica o highlight de linha ativa imediatamente no DOM
+    const cb = document.getElementById(`assign_${profileId}`);
+    if (cb) {
+      _updateRowHighlight(cb);
+    }
+
+    showToast('online', `💾 Alteração salva instantaneamente.`, null);
+  } catch (err) {
+    showToastModerno(`Erro ao salvar atribuição: ${err.message}`, 'error');
+    // Reverte visualmente no DOM caso falhe a requisição
+    const cb = document.getElementById(`assign_${profileId}`);
+    if (cb) {
+      cb.checked = !isChecked;
+      _updateRowHighlight(cb);
+    }
+  } finally {
+    profilesState._isBusy = false;
+  }
+}
+
+// Expõe globalmente
+window.toggleProfileAssignment = toggleProfileAssignment;
 
 // ── Modal: Vincular Perfil a Bot ──────────────────────────────────────────────
 
