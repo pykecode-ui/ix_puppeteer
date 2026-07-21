@@ -38,10 +38,8 @@ module.exports = {
   RECONNECT_DELAY_MS: 3000,
 
   // ── Resolução Automática de CAPTCHA ────────────────────────────
-  // Chave API do serviço de CAPTCHA (detecção automática pelo formato da chave):
-  //   - Capsolver:  Chave começa com 'CAP-'  (ex: 'CAP-ABCD...')
-  //   - CapMonster: Chave formato UUID        (ex: 'a1b2c3d4-1234-...')
-  //   - 2Captcha:   Chave hex 32 chars        (ex: 'a5b86f...')
-  // Deixe vazio ('') para desativar CAPTCHA.
+  // Chave API do 2Captcha para resolver reCAPTCHA automaticamente.
+  // Obtenha em: https://2captcha.com
+  // Deixe vazio ('') para desativar.
   TWOCAPTCHA_API_KEY: 'a17e326270691f3ddc2a926e6b670778',
 };
