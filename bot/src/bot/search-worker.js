@@ -255,6 +255,12 @@ class SearchWorker {
             this.log('[SearchWorker] Fim das páginas de resultados ou botão de paginação não localizado.');
             break;
           }
+          // No mobile o "Mais resultados" carrega via AJAX na mesma página —
+          // encerra o loop após o único clique, sem tentar paginar mais.
+          if (paginou === 'clicked_mobile') {
+            this.log('[SearchWorker] 📱 Clique no "Mais resultados" realizado. Encerrando loop de páginas.');
+            break;
+          }
         }
 
         // Colhe anúncios desta página

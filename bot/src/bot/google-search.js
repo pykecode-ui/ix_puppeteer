@@ -730,11 +730,8 @@ async function goToNextPage(page, log = console.log) {
         await buttonEl.evaluate(el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })).catch(() => {});
         await new Promise(r => setTimeout(r, 1000));
         await buttonEl.click();
-        
-        // Aguarda estabilização do DOM/Ajax no Mobile (5 segundos)
-        log('[Navegação] Aguardando o carregamento dos novos resultados (Ajax)…');
-        await new Promise(r => setTimeout(r, 5000));
-        return true;
+        log('[Navegação] ✅ Botão clicado. Encerrando paginação (Mobile carrega via AJAX na mesma página).');
+        return 'clicked_mobile';
       }
 
       log('[Navegação] ⚠️ Botão "Mais resultados" não foi localizado ou não está visível na tela.');
