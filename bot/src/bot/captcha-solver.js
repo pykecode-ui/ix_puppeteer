@@ -1,14 +1,14 @@
 /**
  * bot/src/bot/captcha-solver.js
  * ─────────────────────────────────────────────────────────────────────────────
- * Detecção e resolução de reCAPTCHA v2 / Enterprise via 2Captcha API.
- * Adaptado do CaptchaSolver do adspower.py → Node.js.
+ * Detecção e resolução de reCAPTCHA v2 / Enterprise via:
+ *   - Capsolver    (chave começa com 'CAP-')
+ *   - CapMonster   (chave formato UUID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+ *   - 2Captcha     (chave hex de 32 chars ou outra)
  *
  * Uso:
- *   const solver = new CaptchaSolver('SUA_API_KEY_2CAPTCHA');
+ *   const solver = new CaptchaSolver('SUA_API_KEY');
  *   const resolveu = await solver.trySolveIfPresent(page, log);
- *
- * Se não tiver chave API, a classe apenas detecta CAPTCHA sem resolver.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -17,6 +17,10 @@ const axios = require('axios');
 // URLs da API 2Captcha
 const TWOCAPTCHA_IN_URL  = 'https://2captcha.com/in.php';
 const TWOCAPTCHA_RES_URL = 'https://2captcha.com/res.php';
+
+// URLs da API CapMonster (formato idêntico ao Capsolver)
+const CAPMONSTER_URL = 'https://api.capmonster.cloud';
+const CAPSOLVER_URL  = 'https://api.capsolver.com';
 
 // Erros fatais (não adianta tentar novamente)
 const FATAL_ERRORS = new Set([
@@ -29,15 +33,36 @@ const FATAL_ERRORS = new Set([
   'ERROR_WRONG_GOOGLEKEY',
 ]);
 
+/** Detecta se uma string é um UUID v4 (formato CapMonster) */
+function isUUID(str) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+}
+
 class CaptchaSolver {
   /**
-   * @param {string} apiKey - Chave API do 2Captcha ou Capsolver (opcional — se vazia, só detecta)
+   * @param {string} apiKey - Chave API (Capsolver, CapMonster ou 2Captcha)
    */
   constructor(apiKey) {
     this.apiKey = (apiKey || '').trim();
     this.enabled = this.apiKey.length > 0;
-    this.isCapsolver = this.apiKey.startsWith('CAP-');
-    this.providerName = this.isCapsolver ? 'Capsolver' : '2Captcha';
+
+    // Detecção automática do provedor pela chave
+    if (this.apiKey.startsWith('CAP-')) {
+      this.provider = 'capsolver';
+      this.providerName = 'Capsolver';
+      this.taskApiUrl = CAPSOLVER_URL;
+    } else if (isUUID(this.apiKey)) {
+      this.provider = 'capmonster';
+      this.providerName = 'CapMonster';
+      this.taskApiUrl = CAPMONSTER_URL;
+    } else {
+      this.provider = '2captcha';
+      this.providerName = '2Captcha';
+      this.taskApiUrl = null; // usa endpoints próprios
+    }
+
+    // compat retrocompatibilidade
+    this.isCapsolver = this.provider === 'capsolver' || this.provider === 'capmonster';
   }
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -51,25 +76,20 @@ class CaptchaSolver {
    */
   async pageHasRecaptcha(page) {
     try {
-      // Verifica data-sitekey
-      const hasSitekey = await page.evaluate(() => {
-        const el = document.querySelector('[data-sitekey]');
-        if (el) {
-          const sk = (el.getAttribute('data-sitekey') || '').trim();
-          if (sk) return true;
-        }
-        return false;
-      });
-      if (hasSitekey) return true;
+      return await page.evaluate(() => {
+        // Verifica URL do Google /sorry/
+        if (window.location.href.includes('/sorry/')) return true;
 
-      // Verifica iframes de reCAPTCHA
-      const hasIframe = await page.evaluate(() => {
+        // Verifica data-sitekey
+        const el = document.querySelector('[data-sitekey]');
+        if (el && (el.getAttribute('data-sitekey') || '').trim().length >= 10) return true;
+
+        // Verifica iframes de reCAPTCHA
         const iframes = document.querySelectorAll(
           "iframe[src*='recaptcha'], iframe[src*='gstatic.com/recaptcha'], iframe[title*='reCAPTCHA']"
         );
         return iframes.length > 0;
       });
-      return hasIframe;
     } catch (_) {
       return false;
     }
@@ -77,6 +97,8 @@ class CaptchaSolver {
 
   /**
    * Extrai sitekey, data-s e tipo (v2/Enterprise) da página.
+   * PRIORIDADE: iframe k= (mais confiável) → data-sitekey → scripts inline
+   *
    * @param {import('puppeteer-core').Page} page
    * @returns {Promise<{sitekey: string|null, dataS: string|null, enterprise: boolean}>}
    */
@@ -84,38 +106,64 @@ class CaptchaSolver {
     try {
       const info = await page.evaluate(() => {
         let enterprise = false;
+        const MIN_SITEKEY_LEN = 20;
 
-        // Verifica iframes enterprise
-        const iframes = document.querySelectorAll(
+        // ─── 1. Busca TODOS os iframes de reCAPTCHA ───────────────────────
+        const iframes = Array.from(document.querySelectorAll(
           "iframe[src*='recaptcha'], iframe[src*='gstatic.com/recaptcha'], iframe[src*='google.com/recaptcha']"
-        );
+        ));
+
+        // Detecta modo enterprise pelos iframes
         for (const f of iframes) {
-          const src = f.getAttribute('src') || '';
-          if (/enterprise/i.test(src)) enterprise = true;
+          if (/enterprise/i.test(f.getAttribute('src') || '')) enterprise = true;
         }
 
-        // Verifica data-sitekey em elementos
+        // ─── 2. Tenta extrair k= do src do iframe (mais confiável para Google Search) ───
+        for (const f of iframes) {
+          const src = f.getAttribute('src') || '';
+          try {
+            const u = new URL(src, location.href);
+            const k = (u.searchParams.get('k') || '').trim();
+            if (k.length >= MIN_SITEKEY_LEN) {
+              const s = u.searchParams.get('s') || '';
+              return { sitekey: k, dataS: s || null, enterprise };
+            }
+          } catch (_) {}
+        }
+
+        // ─── 3. Busca data-sitekey em elementos do DOM ────────────────────
         for (const el of document.querySelectorAll('[data-sitekey]')) {
           const k = (el.getAttribute('data-sitekey') || '').trim();
-          if (k) {
+          if (k.length >= MIN_SITEKEY_LEN) {
             const ds = (el.getAttribute('data-s') || '').trim();
             return { sitekey: k, dataS: ds || null, enterprise };
           }
         }
 
-        // Extrai sitekey do src do iframe (parâmetro k=)
-        for (const f of iframes) {
-          const src = f.getAttribute('src') || '';
-          if (/enterprise/i.test(src)) enterprise = true;
-          try {
-            const u = new URL(src, location.href);
-            const k = u.searchParams.get('k');
-            if (k) {
-              const s = u.searchParams.get('s');
-              return { sitekey: k.trim(), dataS: s ? s.trim() : null, enterprise };
-            }
-          } catch (_) {}
+        // ─── 4. Varre scripts inline (página /sorry/ do Google) ───────────
+        const scripts = Array.from(document.querySelectorAll('script'));
+        for (const s of scripts) {
+          const text = s.textContent || '';
+          // Padrão: "sitekey":"6LxxxX..."
+          const m1 = text.match(/["']sitekey["']\s*:\s*["']([A-Za-z0-9_-]{20,}?)["']/i);
+          if (m1 && m1[1].length >= MIN_SITEKEY_LEN) {
+            return { sitekey: m1[1], dataS: null, enterprise };
+          }
+          // Padrão: k=6LxxxX... em strings de URL dentro de scripts
+          const m2 = text.match(/[?&]k=([6L][A-Za-z0-9_-]{20,}?)["'&\s]/);
+          if (m2 && m2[1].length >= MIN_SITEKEY_LEN) {
+            return { sitekey: m2[1], dataS: null, enterprise };
+          }
         }
+
+        // ─── 5. Tenta extrair da URL direta da página (/sorry/?g=xxx&k=xxx) ──
+        try {
+          const u = new URL(location.href);
+          const k = (u.searchParams.get('k') || '').trim();
+          if (k.length >= MIN_SITEKEY_LEN) {
+            return { sitekey: k, dataS: null, enterprise };
+          }
+        } catch (_) {}
 
         return { sitekey: null, dataS: null, enterprise: false };
       });
@@ -127,23 +175,24 @@ class CaptchaSolver {
   }
 
   // ════════════════════════════════════════════════════════════════════════════
-  // RESOLUÇÃO DE CAPTCHA (2Captcha API)
+  // RESOLUÇÃO DE CAPTCHA
   // ════════════════════════════════════════════════════════════════════════════
 
   /**
-   * Envia o CAPTCHA para o 2Captcha e aguarda resolução.
+   * Envia o CAPTCHA para o serviço configurado e aguarda resolução.
    * @param {string} sitekey
    * @param {string} pageUrl
    * @param {object} opts
    * @returns {Promise<string|null>} Token ou null
    */
   async solveRecaptcha(sitekey, pageUrl, opts = {}) {
-    const { dataS, cookies, enterprise = false, proxy = null } = opts;
+    const { dataS, cookies, enterprise = false } = opts;
+    const log = opts.log || console.log;
 
     if (!this.enabled) return null;
 
     if (this.isCapsolver) {
-      return await this._solveCapsolver(sitekey, pageUrl, { dataS, enterprise, proxy });
+      return await this._solveCapsolver(sitekey, pageUrl, { dataS, enterprise, log });
     }
 
     // Submete ao 2Captcha
@@ -162,103 +211,127 @@ class CaptchaSolver {
     if (!reqId) return null;
 
     const mode = enterprise ? 'Enterprise' : 'v2';
-    console.log(`[2captcha] Enviado (${mode}, ID: ${reqId}). Aguardando resolução…`);
+    log(`[2captcha] Enviado (${mode}, ID: ${reqId}). Aguardando resolução…`);
 
     // Aguarda 12 segundos antes de iniciar polling
     await new Promise((r) => setTimeout(r, 12_000));
 
-    return await this._poll(reqId);
+    return await this._poll(reqId, log);
   }
 
   /**
-   * Resolve o CAPTCHA usando a API do Capsolver (createTask + getTaskResult).
+   * Resolve via Capsolver ou CapMonster (ambos usam a mesma API REST).
+   * ProxyLess: usa a internet da máquina local diretamente.
    * @private
    */
   async _solveCapsolver(sitekey, pageUrl, opts = {}) {
-    const { dataS, enterprise = false, proxy = null } = opts;
-    try {
-      let taskType;
-      const taskPayload = {
-        websiteURL: pageUrl,
-        websiteKey: sitekey,
-      };
+    const { dataS, enterprise = false, log = console.log } = opts;
+    const apiBase = this.taskApiUrl;
+    const providerName = this.providerName;
 
-      // Se houver proxy configurado no perfil, usamos as tarefas com proxy próprio para evitar Unsupported siteKey no Google Search
-      if (proxy && proxy.proxyAddress && proxy.proxyPort) {
-        taskType = enterprise ? 'ReCaptchaV2EnterpriseTask' : 'ReCaptchaV2Task';
-        taskPayload.type = taskType;
-        taskPayload.proxyType = proxy.proxyType || 'socks5';
-        taskPayload.proxyAddress = proxy.proxyAddress;
-        taskPayload.proxyPort = Number(proxy.proxyPort);
-        if (proxy.proxyUser) taskPayload.proxyLogin = proxy.proxyUser;
-        if (proxy.proxyPassword) taskPayload.proxyPassword = proxy.proxyPassword;
-      } else {
-        taskType = enterprise ? 'ReCaptchaV2EnterpriseTaskProxyLess' : 'ReCaptchaV2TaskProxyLess';
-        taskPayload.type = taskType;
+    // Sitekey oficial do Google Search /sorry/ — testada e confirmada como aceita
+    const GOOGLE_SORRY_SITEKEY = '6Le-wvkSAAAAAPBMRTvw0Q4Muexq9bi0DJwx_mJ-';
+
+    // CapMonster usa nomes ligeiramente diferentes dos tipos de task
+    const getTaskType = (isEnterprise) => {
+      if (this.provider === 'capmonster') {
+        return isEnterprise
+          ? 'RecaptchaV2EnterpriseTaskProxyless'  // CapMonster: ProxyLess com "less" minúsculo
+          : 'NoCaptchaTaskProxyless';
       }
+      // Capsolver
+      return isEnterprise
+        ? 'ReCaptchaV2EnterpriseTaskProxyLess'
+        : 'ReCaptchaV2TaskProxyLess';
+    };
 
-      if (dataS) {
-        taskPayload.enterprisePayload = { s: dataS };
-      }
+    const runTask = async (currentSitekey, isEnterprise) => {
+      try {
+        const taskType = getTaskType(isEnterprise);
+        const taskPayload = {
+          type: taskType,
+          websiteURL: pageUrl,
+          websiteKey: currentSitekey,
+        };
 
-      const res = await axios.post('https://api.capsolver.com/createTask', {
-        clientKey: this.apiKey,
-        task: taskPayload
-      }, { timeout: 30000 });
+        if (dataS) taskPayload.enterprisePayload = { s: dataS };
 
-      if (res.data?.errorId !== 0) {
-        console.log(`[Capsolver] Erro ao criar task (${taskType}): ${res.data?.errorDescription || 'Erro desconhecido'}`);
-        return null;
-      }
+        log(`🔄 [CAPTCHA] [${providerName}] Enviando tarefa (tipo: ${taskType})...`);
+        log(`🔄 [CAPTCHA] Sitekey: ${currentSitekey}`);
 
-      const taskId = res.data.taskId;
-      const mode = (enterprise ? 'Enterprise' : 'v2') + (proxy ? ' (Proxy)' : ' (ProxyLess)');
-      console.log(`[Capsolver] Enviado (${mode}, ID: ${taskId}). Aguardando resolução…`);
-
-      // Polling a cada 3 segundos, até 40 vezes (120s max)
-      for (let i = 0; i < 40; i++) {
-        await new Promise((r) => setTimeout(r, 3000));
-        const statusRes = await axios.post('https://api.capsolver.com/getTaskResult', {
+        const res = await axios.post(`${apiBase}/createTask`, {
           clientKey: this.apiKey,
-          taskId: taskId
-        }, { timeout: 15000 });
+          task: taskPayload
+        }, { timeout: 30000 });
 
-        if (statusRes.data?.errorId !== 0) {
-          console.log(`[Capsolver] Erro no polling: ${statusRes.data?.errorDescription}`);
-          return null;
-        }
+        return { res, taskType };
+      } catch (err) {
+        return { error: err };
+      }
+    };
 
-        if (statusRes.data?.status === 'ready') {
-          console.log('[Capsolver] ✅ Resolvido!');
-          return statusRes.data.solution?.gRecaptchaResponse || null;
-        }
+    let result = await runTask(sitekey, enterprise);
 
-        if (statusRes.data?.status === 'failed') {
-          console.log('[Capsolver] ❌ Resolução falhou no Capsolver.');
-          return null;
+    // Se falhar por 'Unsupported siteKey', tenta com a sitekey oficial do Google /sorry/
+    const errDesc = result.res?.data?.errorDescription || '';
+    const errCode = result.res?.data?.errorCode || '';
+    if (
+      errCode === 'ERROR_INVALID_SITEKEY' ||
+      errDesc.includes('Unsupported siteKey') ||
+      errDesc.includes('unsupported') ||
+      result.res?.data?.errorId !== 0
+    ) {
+      if (sitekey !== GOOGLE_SORRY_SITEKEY) {
+        log(`⚠️ [CAPTCHA] Sitekey original recusada (${errDesc || errCode}). Tentando com sitekey oficial do Google...`);
+        result = await runTask(GOOGLE_SORRY_SITEKEY, false);
+        // Tenta também Enterprise se v2 falhar
+        if (result.res?.data?.errorId !== 0) {
+          result = await runTask(GOOGLE_SORRY_SITEKEY, true);
         }
       }
-      console.log('[Capsolver] ⏳ Timeout na resolução.');
-      return null;
-    } catch (err) {
-      if (err.response?.data) {
-        console.log(`[Capsolver] Erro de API (${err.response.status}):`, JSON.stringify(err.response.data));
-      } else {
-        console.log(`[Capsolver] Erro de rede/API: ${err.message}`);
-      }
+    }
+
+    if (result.error || result.res?.data?.errorId !== 0) {
+      log(`❌ [CAPTCHA] [${providerName}] Tarefa recusada: ${result.res?.data?.errorDescription || result.error?.message}`);
       return null;
     }
+
+    const taskId = result.res.data.taskId;
+    log(`🚨 [CAPTCHA] ⏳ reCAPTCHA enviado ao ${providerName}! Task ID: ${taskId}`);
+
+    // Polling a cada 3s — máx 120s (40 iterações)
+    for (let i = 1; i <= 40; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const statusRes = await axios.post(`${apiBase}/getTaskResult`, {
+        clientKey: this.apiKey,
+        taskId: taskId
+      }, { timeout: 15000 });
+
+      const status = statusRes.data?.status || 'desconhecido';
+      if (status === 'ready') {
+        log(`✅ [CAPTCHA] 🎉 Resolvido pelo ${providerName} em ${i * 3}s!`);
+        return statusRes.data.solution?.gRecaptchaResponse || null;
+      }
+      if (status === 'failed') {
+        log(`❌ [CAPTCHA] ${providerName} falhou ao resolver.`);
+        return null;
+      }
+      log(`⏳ [CAPTCHA] Resolvendo... ${i * 3}s (status: ${status})`);
+    }
+    log(`❌ [CAPTCHA] Timeout: 120s sem resolução pelo ${providerName}.`);
+    return null;
   }
 
   /**
-   * Consulta saldo da conta (2Captcha ou Capsolver).
+   * Consulta saldo da conta (Capsolver, CapMonster ou 2Captcha).
    * @returns {Promise<number|null>}
    */
   async getBalance() {
     if (!this.enabled) return null;
-    if (this.isCapsolver) {
+
+    if (this.provider === 'capsolver' || this.provider === 'capmonster') {
       try {
-        const res = await axios.post('https://api.capsolver.com/getBalance', {
+        const res = await axios.post(`${this.taskApiUrl}/getBalance`, {
           clientKey: this.apiKey
         }, { timeout: 10_000 });
         if (res.data?.errorId === 0) {
@@ -268,6 +341,7 @@ class CaptchaSolver {
       return null;
     }
 
+    // 2Captcha
     try {
       const res = await axios.get(TWOCAPTCHA_RES_URL, {
         params: { key: this.apiKey, action: 'getbalance', json: 1 },
@@ -321,7 +395,7 @@ class CaptchaSolver {
    * Polling do resultado no 2Captcha.
    * @private
    */
-  async _poll(reqId) {
+  async _poll(reqId, log = console.log) {
     for (let i = 0; i < 55; i++) {
       try {
         const res = await axios.get(TWOCAPTCHA_RES_URL, {
@@ -333,7 +407,7 @@ class CaptchaSolver {
         if (typeof data === 'object' && Number(data.status) === 1) {
           const token = String(data.request || '').trim();
           if (token && token.length > 20) {
-            console.log('[2captcha] ✅ Resolvido!');
+            log('[2captcha] ✅ Resolvido!');
             return token;
           }
         }
@@ -354,16 +428,16 @@ class CaptchaSolver {
           continue;
         }
         if (text.startsWith('OK|')) {
-          console.log('[2captcha] ✅ Resolvido!');
+          log('[2captcha] ✅ Resolvido!');
           return text.split('|')[1];
         }
       } catch (err) {
-        console.log(`[2captcha] Falha no poll: ${err.message}`);
+        log(`[2captcha] Falha no poll: ${err.message}`);
         await new Promise((r) => setTimeout(r, 4_000));
       }
     }
 
-    console.log('[2captcha] ⏳ Timeout: demasiadas tentativas sem token.');
+    log('[2captcha] ⏳ Timeout: demasiadas tentativas sem token.');
     return null;
   }
 
@@ -386,34 +460,6 @@ class CaptchaSolver {
     return null;
   }
 
-  /**
-   * Consulta os dados de proxy do perfil no ixBrowser local.
-   * @private
-   */
-  async _getProfileProxy(profileId) {
-    try {
-      const config = require('../../config');
-      const res = await axios.post(`${config.IX_API_BASE}/api/v2/profile-list`, {
-        profile_id: Number(profileId)
-      }, { timeout: 5000 });
-
-      const profiles = res.data?.data?.data || [];
-      const profile = profiles.find(p => Number(p.profile_id) === Number(profileId));
-      if (profile && profile.proxy_ip && profile.proxy_port && profile.proxy_type !== 'direct') {
-        return {
-          proxyType: profile.proxy_type,
-          proxyAddress: profile.proxy_ip,
-          proxyPort: Number(profile.proxy_port),
-          proxyUser: profile.proxy_user || config.PROXY_USER || '',
-          proxyPassword: profile.proxy_password || config.PROXY_PASSWORD || ''
-        };
-      }
-    } catch (err) {
-      console.log(`[CaptchaSolver] Erro ao obter proxy para o perfil #${profileId}:`, err.message);
-    }
-    return null;
-  }
-
   // ════════════════════════════════════════════════════════════════════════════
   // INTEGRAÇÃO COMPLETA (detecta + resolve + aplica)
   // ════════════════════════════════════════════════════════════════════════════
@@ -424,6 +470,7 @@ class CaptchaSolver {
    *
    * @param {import('puppeteer-core').Page} page
    * @param {function} log
+   * @param {number|null} profileId
    * @returns {Promise<boolean>}
    */
   async trySolveIfPresent(page, log = console.log, profileId = null) {
@@ -431,74 +478,111 @@ class CaptchaSolver {
     const hasRecaptcha = await this.pageHasRecaptcha(page);
     if (!hasRecaptcha) return true; // ✅ Sem CAPTCHA
 
-    log('[Captcha] ⚠️ reCAPTCHA detectado na página!');
+    log('[CAPTCHA] ⚠️ reCAPTCHA detectado na página!');
+    log(`[CAPTCHA] URL atual: ${page.url()}`);
 
     if (!this.enabled) {
-      log(`[Captcha] ❌ Sem chave API do ${this.providerName}. Configure TWOCAPTCHA_API_KEY no config.js.`);
+      log(`[CAPTCHA] ❌ Sem chave API configurada. Configure TWOCAPTCHA_API_KEY no config.js.`);
       return false;
+    }
+
+    // Aguarda o iframe do reCAPTCHA carregar completamente
+    log('[CAPTCHA] Aguardando carregamento do iframe do reCAPTCHA...');
+    try {
+      await page.waitForSelector(
+        "iframe[src*='recaptcha'], [data-sitekey]",
+        { timeout: 8000 }
+      );
+    } catch (_) {
+      log('[CAPTCHA] ⚠️ Iframe do reCAPTCHA não encontrado no DOM, tentando extrair mesmo assim...');
     }
 
     const { sitekey, dataS, enterprise } = await this.findSitekeyAndDataS(page);
+
     if (!sitekey) {
-      log('[Captcha] ❌ reCAPTCHA visível mas sitekey não encontrado no DOM.');
+      log('[CAPTCHA] ❌ Sitekey não encontrada no DOM. Dump da URL e iframes:');
+      // Debug: loga o que está disponível na página
+      try {
+        const debugInfo = await page.evaluate(() => {
+          const iframes = Array.from(document.querySelectorAll('iframe')).map(f => f.getAttribute('src') || '').filter(s => s.includes('recaptcha'));
+          const sitekeys = Array.from(document.querySelectorAll('[data-sitekey]')).map(el => el.getAttribute('data-sitekey'));
+          return { iframes, sitekeys, url: location.href };
+        });
+        log(`[CAPTCHA] Debug: URL=${debugInfo.url}`);
+        log(`[CAPTCHA] Debug: iframes=${JSON.stringify(debugInfo.iframes)}`);
+        log(`[CAPTCHA] Debug: data-sitekeys=${JSON.stringify(debugInfo.sitekeys)}`);
+      } catch (_) {}
       return false;
     }
 
-    log(`[Captcha] 🔑 Resolvendo (sitekey: …${sitekey.slice(-8)}, ${enterprise ? 'Enterprise' : 'v2'})…`);
+    log(`[CAPTCHA] 🔑 Sitekey encontrada: ${sitekey} (${sitekey.length} chars, ${enterprise ? 'Enterprise' : 'v2'})`);
 
-    // Busca o proxy do perfil se for Capsolver para evitar erro Unsupported siteKey no Google Search
-    let proxy = null;
-    if (this.isCapsolver) {
-      const resolvedId = profileId || await this._getProfileIdFromBrowser(page);
-      if (resolvedId) {
-        log(`[Captcha] Detectado perfil #${resolvedId} do ixBrowser. Buscando informações de proxy...`);
-        proxy = await this._getProfileProxy(resolvedId);
-        if (proxy) {
-          log(`[Captcha] Proxy do perfil obtido com sucesso: ${proxy.proxyType}://${proxy.proxyAddress}:${proxy.proxyPort}`);
-        } else {
-          log('[Captcha] Perfil configurado em modo Direto (sem proxy) ou erro ao obter. Usando modo ProxyLess.');
-        }
-      }
-    }
+    // A websiteURL para o Capsolver DEVE ser a URL da página onde o CAPTCHA está exibido
+    // (a /sorry/index), NÃO a URL de destino (continue=).
+    // O Capsolver valida a sitekey contra essa URL.
+    const captchaPageUrl = page.url();
+    log(`[CAPTCHA] URL da página do CAPTCHA: ${captchaPageUrl}`);
 
-    // Extrai cookies para 2Captcha / Capsolver
+    // Extrai a URL de destino (continue=) — usada apenas para navegar após resolver
+    let continueUrl = captchaPageUrl;
+    try {
+      const u = new URL(captchaPageUrl);
+      const raw = u.searchParams.get('continue');
+      if (raw) continueUrl = decodeURIComponent(raw);
+    } catch (_) {}
+
+    // Extrai cookies para Capsolver
     let cookiesHeader = null;
     try {
       const cookies = await page.cookies();
       cookiesHeader = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
     } catch (_) {}
 
-    // Tenta resolver
-    let token = await this.solveRecaptcha(sitekey, page.url(), {
-      dataS,
-      cookies: cookiesHeader,
-      enterprise,
-      proxy
+    // ─── Tentativa 1: tipo detectado (enterprise ou v2) ─────────────────────
+    log(`[CAPTCHA] 🔄 Tentativa 1: enviando como ${enterprise ? 'Enterprise' : 'v2'} ProxyLess...`);
+    let token = await this.solveRecaptcha(sitekey, captchaPageUrl, {
+      dataS, cookies: cookiesHeader, enterprise, log
     });
 
-    // Se falhou, tenta com o tipo oposto (v2 ↔ Enterprise)
+    // ─── Tentativa 2: tipo oposto ────────────────────────────────────────────
     if (!token) {
-      log(`[Captcha] Retentativa como ${enterprise ? 'v2 clássico' : 'Enterprise'}…`);
-      token = await this.solveRecaptcha(sitekey, page.url(), {
-        dataS,
-        cookies: cookiesHeader,
-        enterprise: !enterprise,
-        proxy
+      log(`[CAPTCHA] 🔄 Tentativa 2: retentando como ${enterprise ? 'v2 clássico' : 'Enterprise'}...`);
+      token = await this.solveRecaptcha(sitekey, captchaPageUrl, {
+        dataS, cookies: cookiesHeader, enterprise: !enterprise, log
       });
     }
 
+    // ─── Tentativa 3: sitekey oficial conhecida do Google Search /sorry/ ─────
+    // O Google pode exibir sitekeys variantes dependendo do IP/browser,
+    // mas o Capsolver só suporta a sitekey oficial registrada.
+    const GOOGLE_SORRY_SITEKEY = '6Le-wvkSAAAAAPBMRTvw0Q4Muexq9bi0DJwx_mJ-';
+    if (!token && sitekey !== GOOGLE_SORRY_SITEKEY) {
+      log(`[CAPTCHA] 🔄 Tentativa 3: sitekey extraída (${sitekey}) não suportada pelo Capsolver.`);
+      log(`[CAPTCHA] 🔄 Usando sitekey oficial do Google Search: ${GOOGLE_SORRY_SITEKEY}`);
+      token = await this.solveRecaptcha(GOOGLE_SORRY_SITEKEY, captchaPageUrl, {
+        dataS, cookies: cookiesHeader, enterprise: false, log
+      });
+      if (!token) {
+        // Tenta também como Enterprise com a sitekey oficial
+        token = await this.solveRecaptcha(GOOGLE_SORRY_SITEKEY, captchaPageUrl, {
+          dataS, cookies: cookiesHeader, enterprise: true, log
+        });
+      }
+    }
+
     if (!token) {
-      log(`[Captcha] ❌ Não foi possível obter token. Verifique saldo e chave do ${this.providerName}.`);
+      log(`[CAPTCHA] ❌ Não foi possível resolver o CAPTCHA. Verifique saldo e chave do ${this.providerName}.`);
       return false;
     }
 
-    // Aplica o token via formulário POST e callbacks do Google Search
+    // ─── Aplica o token na página ─────────────────────────────────────────
     try {
-      log('[Captcha] Aplicando token de resposta na página...');
+      log('[CAPTCHA] Aplicando token de resposta na página...');
 
       const submitted = await page.evaluate((t) => {
         // 1. Preenche o textarea oculto do Google
-        const textarea = document.getElementById('g-recaptcha-response') || document.querySelector('[name="g-recaptcha-response"]');
+        const textarea = document.getElementById('g-recaptcha-response')
+          || document.querySelector('[name="g-recaptcha-response"]');
         if (textarea) {
           textarea.value = t;
           textarea.innerHTML = t;
@@ -521,25 +605,44 @@ class CaptchaSolver {
       }, token);
 
       if (submitted) {
-        log(`[Captcha] Formulário/callback do Captcha enviado (${submitted}). Aguardando navegação de resposta...`);
-        // Espera navegar após o post do form
+        log(`[CAPTCHA] Formulário/callback enviado (${submitted}). Aguardando navegação...`);
         await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {
-          log('[Captcha] Sem evento de navegação detectado após o envio, prosseguindo...');
+          log('[CAPTCHA] Sem navegação automática detectada, prosseguindo...');
         });
       } else {
-        // Fallback histórico: aplicar na URL e navegar via GET
-        log('[Captcha] Nenhum formulário/callback localizado. Recarregando via GET com token na URL...');
-        const url = new URL(page.url());
-        url.searchParams.set('g-recaptcha-response', token);
-        const { pageGotoRobust, waitSerpUrlOrMarkers } = require('./google-search');
-        await pageGotoRobust(page, url.toString(), { log });
-        await waitSerpUrlOrMarkers(page, 14_000);
+        // Fallback: navegar direto para a URL de destino (continue=)
+        log(`[CAPTCHA] Nenhum formulário localizado. Navegando para URL de destino: ${continueUrl}`);
+        const { pageGotoRobust } = require('./google-search');
+        await pageGotoRobust(page, continueUrl, { log });
       }
 
-      log('[Captcha] ✅ Token aplicado e página atualizada com sucesso!');
+      // ── VERIFICAÇÃO CRÍTICA: o token foi aceito pelo Google? ─────────────
+      // Se ainda estiver na /sorry/, o token foi rejeitado (sitekey errada).
+      // Nesse caso, tentamos navegar direto para a URL de destino.
+      const urlAfter = page.url();
+      if (urlAfter.includes('/sorry/')) {
+        log(`[CAPTCHA] ⚠️ Token rejeitado pelo Google (ainda na /sorry/). Tentando navegar manualmente para: ${continueUrl}`);
+        const { pageGotoRobust, waitSerpUrlOrMarkers } = require('./google-search');
+        try {
+          await pageGotoRobust(page, continueUrl, { log });
+          await new Promise(r => setTimeout(r, 2000));
+
+          const urlAfter2 = page.url();
+          if (urlAfter2.includes('/sorry/')) {
+            log('[CAPTCHA] ❌ Google continua bloqueando o acesso. IP possivelmente banido temporariamente.');
+            return false;
+          }
+          log('[CAPTCHA] ✅ Navegação manual bem-sucedida após rejeição do token!');
+        } catch (navErr) {
+          log(`[CAPTCHA] ❌ Erro na navegação manual: ${navErr.message}`);
+          return false;
+        }
+      }
+
+      log(`[CAPTCHA] ✅ CAPTCHA resolvido e página de destino carregada: ${page.url().substring(0, 80)}`);
       return true;
     } catch (err) {
-      log(`[Captcha] ❌ Erro ao aplicar token: ${err.message}`);
+      log(`[CAPTCHA] ❌ Erro ao aplicar token: ${err.message}`);
       return false;
     }
   }

@@ -94,6 +94,8 @@ async function runProfileLoop(profileId, http) {
     log('info', `🔁 Perfil #${profileId}: Configurado com loop_count=${loopCount}, infinite=${isInfinite}`);
 
     let iteration = 0;
+    let consecutiveOpenFailures = 0;
+
     while (!cancelled) {
       iteration++;
 
@@ -109,9 +111,29 @@ async function runProfileLoop(profileId, http) {
       let openRes;
       try {
         openRes = await COMMANDS.open_profile({ profileId });
+        consecutiveOpenFailures = 0; // Reseta falhas em caso de sucesso
       } catch (err) {
+        consecutiveOpenFailures++;
         log('error', `❌ [Ciclo ${iteration}] Perfil #${profileId}: Falha ao abrir perfil: ${err.message}`);
-        
+
+        // Verifica se é erro fatal de cota do ixBrowser (ex: código 1018 - 100 aberturas/dia atingido)
+        const isQuotaError = err.message && (
+          err.message.includes('1018') ||
+          err.message.includes('100 profile opening times') ||
+          err.message.includes('opening times per day') ||
+          err.message.includes('upgrade the plan')
+        );
+
+        if (isQuotaError) {
+          log('error', `🛑 [Perfil #${profileId}] Limite diário de aberturas de perfil do ixBrowser atingido (Erro 1018). Interrompendo loop.`);
+          break;
+        }
+
+        if (consecutiveOpenFailures >= 3) {
+          log('error', `🛑 [Perfil #${profileId}] Interrompendo loop após ${consecutiveOpenFailures} falhas consecutivas de abertura.`);
+          break;
+        }
+
         // Tenta resetar o estado de abertura no ixBrowser preventivamente para destravar
         try {
           log('info', `🔄 [Ciclo ${iteration}] Perfil #${profileId}: Solicitando reset do estado do perfil no ixBrowser...`);

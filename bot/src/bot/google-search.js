@@ -439,6 +439,138 @@ function isValidAdHref(href) {
 }
 
 /**
+ * Rola a página suavemente até o final de forma gradual e incremental para simular
+ * comportamento humano e forçar carregamento via lazy-loading.
+ */
+async function smoothScrollToBottom(page, log = console.log) {
+  try {
+    log('[Navegação] Iniciando rolagem suave para baixo...');
+    await page.evaluate(async () => {
+      await new Promise((resolve) => {
+        let lastScrollY = window.scrollY;
+        let unchangedCount = 0;
+        const distance = 150; // pixels por scroll
+        
+        const timer = setInterval(() => {
+          const maxScrollY = document.documentElement.scrollHeight - window.innerHeight;
+          
+          // Se já está no limite do final da página, resolve imediatamente
+          if (window.scrollY >= maxScrollY - 10) {
+            clearInterval(timer);
+            resolve();
+            return;
+          }
+
+          window.scrollBy(0, distance);
+          const currentScrollY = window.scrollY;
+
+          // Se a posição de scroll não mudou, incrementa contador de travamento
+          if (currentScrollY === lastScrollY) {
+            unchangedCount++;
+            if (unchangedCount >= 3) {
+              clearInterval(timer);
+              resolve();
+              return;
+            }
+          } else {
+            unchangedCount = 0;
+          }
+
+          lastScrollY = currentScrollY;
+        }, 100 + Math.random() * 50); // simula ritmo de leitura humano
+      });
+    });
+    log('[Navegação] Rolagem suave finalizada.');
+  } catch (err) {
+    log(`[Navegação] ⚠️ Erro durante rolagem suave: ${err.message}`);
+  }
+}
+
+/**
+ * Procura o botão "Mais resultados" de forma robusta e multilíngue.
+ */
+async function findMoreResultsButton(page, log = console.log) {
+  const selectors = [
+    'a[data-extended-results]',
+    'button[data-extended-results]',
+    'a.q8s197', 
+    'div.zS514b',
+    'span.PNy8Zc',
+    '[role="button"]'
+  ];
+
+  let buttonEl = null;
+
+  for (const sel of selectors) {
+    const elements = await page.$$(sel).catch(() => []);
+    for (const el of elements) {
+      const visible = await el.evaluate(node => {
+        const style = window.getComputedStyle(node);
+        return style && style.display !== 'none' && style.visibility !== 'hidden' && node.offsetHeight > 0;
+      }).catch(() => false);
+      
+      if (visible) {
+        const text = await page.evaluate(node => node.innerText, el).catch(() => '');
+        const cleanText = text.trim().toLowerCase();
+        const textMatch = [
+          'mais resultados',
+          'ver mais resultados',
+          'more results',
+          'more',
+          'ver más resultados',
+          'más resultados',
+          'mostrar mais',
+          'mostrar mais resultados',
+          'mostrar más',
+          'show more'
+        ].some(term => cleanText === term || cleanText.includes(term));
+
+        if (sel !== '[role="button"]' || textMatch) {
+          buttonEl = el;
+          log(`[Navegação] Botão "Mais resultados" localizado via seletor "${sel}" (Texto: "${text.trim()}")`);
+          return buttonEl;
+        }
+      }
+    }
+  }
+
+  // Fallback geral com base no texto
+  const allElements = await page.$$('span, a, button, div').catch(() => []);
+  for (const el of allElements) {
+    const text = await page.evaluate(node => node.innerText, el).catch(() => '');
+    if (text) {
+      const cleanText = text.trim().toLowerCase();
+      const textMatch = [
+        'mais resultados',
+        'ver mais resultados',
+        'more results',
+        'ver más resultados',
+        'más resultados',
+        'mostrar mais',
+        'mostrar mais resultados',
+        'mostrar más',
+        'show more'
+      ].some(term => cleanText === term || cleanText.includes(term));
+
+      if (textMatch) {
+        const visible = await el.evaluate(node => {
+          const style = window.getComputedStyle(node);
+          return style && style.display !== 'none' && style.visibility !== 'hidden' && node.offsetHeight > 0;
+        }).catch(() => false);
+
+        if (visible) {
+          buttonEl = el;
+          log(`[Navegação] Botão "Mais resultados" localizado via busca de texto: "${text.trim()}"`);
+          return buttonEl;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
  * Colhe anúncios de texto na SERP do Google.
  * Detecta slots de anúncio por data-text-ad, #tads, #tadsb e XPaths.
  *
@@ -544,38 +676,15 @@ async function harvestSerpAds(page, log = console.log) {
     }
   }
 
-  // Scroll para topo
-  try { await page.evaluate(() => window.scrollTo(0, 0)); } catch (_) {}
-  await humanSleep(0.2, 0.35);
+  // Rola a página inteira de forma suave para carregar os anúncios que utilizam lazy-loading
+  await smoothScrollToBottom(page, log);
+  await humanSleep(0.5, 1.0);
 
-  // Busca todos os containers data-text-ad="1"
+  // Coleta os contêineres de anúncio data-text-ad="1"
   const containers = await page.$$('div[data-text-ad="1"]');
 
   let slotIndex = 0;
   for (const container of containers) {
-    const data = await extractAdFromContainer(container);
-    if (!data || !data.href) continue;
-    if (!isValidAdHref(data.href)) continue;
-    if (seenHrefs.has(data.href)) continue;
-
-    seenHrefs.add(data.href);
-    ads.push({
-      ...data,
-      hrefRaw: data.href,
-      hrefDecoded: decodeGoogleHref(data.href),
-      slotIndex: slotIndex++,
-    });
-  }
-
-  // Scroll para rodapé (pode revelar ads lazy-loaded)
-  try {
-    await page.evaluate(() => window.scrollTo(0, Math.max(0, document.body.scrollHeight - window.innerHeight)));
-  } catch (_) {}
-  await humanSleep(0.28, 0.42);
-
-  // 2ª passagem — busca ads no rodapé
-  const containers2 = await page.$$('div[data-text-ad="1"]');
-  for (const container of containers2) {
     const data = await extractAdFromContainer(container);
     if (!data || !data.href) continue;
     if (!isValidAdHref(data.href)) continue;
@@ -608,59 +717,13 @@ async function goToNextPage(page, log = console.log) {
     const userAgent = await page.evaluate(() => navigator.userAgent).catch(() => '');
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
 
+    // Garante que a página está totalmente rolada antes de buscar os botões de paginação
+    await smoothScrollToBottom(page, log);
+    await humanSleep(0.5, 1.0);
+
     if (isMobile) {
       log('[Navegação] Detectado dispositivo móvel. Buscando botão "Mais resultados"…');
-
-      // Tenta localizar o botão "Mais resultados" via seletores do Google Mobile
-      const mobileSelectors = [
-        'a[data-extended-results]',
-        'button[data-extended-results]',
-        'a.q8s197', 
-        'div.zS514b',
-        'span.PNy8Zc'
-      ];
-
-      let buttonEl = null;
-
-      for (const sel of mobileSelectors) {
-        const el = await page.$(sel);
-        if (el) {
-          const visible = await el.evaluate(node => {
-            const style = window.getComputedStyle(node);
-            return style && style.display !== 'none' && style.visibility !== 'hidden' && node.offsetHeight > 0;
-          }).catch(() => false);
-          
-          if (visible) {
-            buttonEl = el;
-            log(`[Navegação] Botão de paginação mobile localizado via seletor: "${sel}"`);
-            break;
-          }
-        }
-      }
-
-      // Fallback: Busca textual em todos os botões/elementos clicáveis
-      if (!buttonEl) {
-        log('[Navegação] Seletores específicos não localizados. Buscando por texto ("Mais resultados" / "More results")…');
-        const elements = await page.$$('span, a, button, div[role="button"]');
-        for (const el of elements) {
-          const text = await page.evaluate(node => node.innerText, el).catch(() => '');
-          if (text) {
-            const cleanText = text.trim().toLowerCase();
-            if (cleanText === 'mais resultados' || cleanText === 'more results' || cleanText.includes('mais resultados')) {
-              const visible = await el.evaluate(node => {
-                const style = window.getComputedStyle(node);
-                return style && style.display !== 'none' && style.visibility !== 'hidden' && node.offsetHeight > 0;
-              }).catch(() => false);
-
-              if (visible) {
-                buttonEl = el;
-                log(`[Navegação] Botão de paginação mobile localizado via texto: "${text.trim()}"`);
-                break;
-              }
-            }
-          }
-        }
-      }
+      const buttonEl = await findMoreResultsButton(page, log);
 
       if (buttonEl) {
         log('[Navegação] Clicando no botão "Mais resultados"…');
@@ -692,7 +755,21 @@ async function goToNextPage(page, log = console.log) {
         await waitSerpUrlOrMarkers(page, 10000);
         return true;
       }
-      log('[Navegação] ⚠️ Link de próxima página (#pnnext) não foi localizado.');
+      
+      log('[Navegação] ⚠️ Link clássico (#pnnext) não localizado. Tentando buscar botão "Mais resultados" (layout de rolagem contínua)...');
+      const buttonEl = await findMoreResultsButton(page, log);
+      if (buttonEl) {
+        log('[Navegação] Clicando no botão "Mais resultados" (Desktop)…');
+        await buttonEl.evaluate(el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })).catch(() => {});
+        await new Promise(r => setTimeout(r, 1000));
+        await buttonEl.click();
+        
+        log('[Navegação] Aguardando o carregamento dos novos resultados (Ajax)…');
+        await new Promise(r => setTimeout(r, 5000));
+        return true;
+      }
+
+      log('[Navegação] ⚠️ Botão de próxima página não foi localizado.');
       return false;
     }
   } catch (err) {
@@ -713,6 +790,7 @@ module.exports = {
   // Navegação
   pageGotoRobust,
   goToNextPage,
+  smoothScrollToBottom,
   // Esperas
   waitSearchBoxVisible,
   waitSerpMarkersAttached,

@@ -38,15 +38,10 @@ module.exports = {
   RECONNECT_DELAY_MS: 3000,
 
   // ── Resolução Automática de CAPTCHA ────────────────────────────
-  // Chave API do 2Captcha ou Capsolver para resolver reCAPTCHA automaticamente.
-  // - Para 2Captcha: Insira a chave tradicional de 32 caracteres (ex: 'a5b86f...').
-  // - Para Capsolver: Insira a chave iniciando com 'CAP-' (ex: 'CAP-ABCD...').
-  // Deixe vazio ('') para desativar — CAPTCHAs serão detectados mas não resolvidos.
-  TWOCAPTCHA_API_KEY: 'CAP-742B0FD85614D5BF3DD3DE23BD446BBF',
-
-  // ── Credenciais de Proxy para Capsolver ──────────────────────────
-  // O Capsolver exige o uso do mesmo proxy do perfil para resolver captchas do Google Search.
-  // Como o ixBrowser oculta a senha do proxy por segurança, preencha o usuário e senha do seu provedor de proxy abaixo:
-  PROXY_USER: '67ce0f6bd3b1f71b40ec__cr.br;state.riograndedonorte',
-  PROXY_PASSWORD: 'd0b4e485c310b80a',
+  // Chave API do serviço de CAPTCHA (detecção automática pelo formato da chave):
+  //   - Capsolver:  Chave começa com 'CAP-'  (ex: 'CAP-ABCD...')
+  //   - CapMonster: Chave formato UUID        (ex: 'a1b2c3d4-1234-...')
+  //   - 2Captcha:   Chave hex 32 chars        (ex: 'a5b86f...')
+  // Deixe vazio ('') para desativar CAPTCHA.
+  TWOCAPTCHA_API_KEY: 'a17e326270691f3ddc2a926e6b670778',
 };
