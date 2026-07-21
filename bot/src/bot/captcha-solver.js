@@ -149,12 +149,13 @@ class CaptchaSolver {
     const reqId = await this._submit(params, log);
     if (!reqId) return null;
 
+    const startTime = Date.now();
     log(`🚨 [CAPTCHA] Task ID: ${reqId}. Aguardando resolução...`);
 
-    // Aguarda 12s antes de iniciar polling (2Captcha recomenda)
-    await new Promise((r) => setTimeout(r, 12_000));
+    // Aguarda 5s antes de iniciar polling
+    await new Promise((r) => setTimeout(r, 5_000));
 
-    return await this._poll(reqId, log);
+    return await this._poll(reqId, log, startTime);
   }
 
   /**
@@ -217,8 +218,8 @@ class CaptchaSolver {
    * Polling do resultado no 2Captcha.
    * @private
    */
-  async _poll(reqId, log = console.log) {
-    for (let i = 0; i < 55; i++) {
+  async _poll(reqId, log = console.log, startTime = Date.now()) {
+    for (let i = 0; i < 60; i++) {
       try {
         const res = await axios.get(TWOCAPTCHA_RES_URL, {
           params: { key: this.apiKey, action: 'get', id: reqId, json: '1' },
@@ -230,7 +231,8 @@ class CaptchaSolver {
         if (typeof data === 'object' && Number(data.status) === 1) {
           const token = String(data.request || '').trim();
           if (token && token.length > 20) {
-            log('[2captcha] ✅ Resolvido!');
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+            log(`✅ [CAPTCHA] 🎉 2Captcha resolveu em ${elapsed}s!`);
             return token;
           }
         }
@@ -238,21 +240,31 @@ class CaptchaSolver {
         if (typeof data === 'object') {
           const msg = String(data.request || '').trim().toUpperCase();
           if (msg.includes('NOT_READY') || msg.includes('CAPCHA_NOT_READY')) {
-            log(`⏳ [CAPTCHA] Aguardando... (${(i + 1) * 5}s)`);
-            await new Promise((r) => setTimeout(r, i < 8 ? 5_000 : 6_000));
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
+            log(`⏳ [CAPTCHA] Aguardando 2Captcha... ${elapsed}s decorridos`);
+            await new Promise((r) => setTimeout(r, 5_000));
             continue;
           }
-          if ([...FATAL_ERRORS].some((e) => msg.includes(e))) return null;
-          if (msg.startsWith('ERROR_')) return null;
+          if ([...FATAL_ERRORS].some((e) => msg.includes(e))) {
+            log(`❌ [CAPTCHA] Erro fatal: ${msg}`);
+            return null;
+          }
+          if (msg.startsWith('ERROR_')) {
+            log(`❌ [CAPTCHA] Erro 2Captcha: ${msg}`);
+            return null;
+          }
         }
 
         const text = typeof data === 'string' ? data.trim() : '';
         if (text.includes('CAPCHA_NOT_READY') || text.includes('NOT_READY')) {
-          await new Promise((r) => setTimeout(r, i < 8 ? 5_000 : 6_000));
+          const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
+          log(`⏳ [CAPTCHA] Aguardando 2Captcha... ${elapsed}s decorridos`);
+          await new Promise((r) => setTimeout(r, 5_000));
           continue;
         }
         if (text.startsWith('OK|')) {
-          log('[2captcha] ✅ Resolvido!');
+          const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+          log(`✅ [CAPTCHA] 🎉 2Captcha resolveu em ${elapsed}s!`);
           return text.split('|')[1];
         }
       } catch (err) {
@@ -261,7 +273,7 @@ class CaptchaSolver {
       }
     }
 
-    log('[2captcha] ⏳ Timeout: demasiadas tentativas sem token.');
+    log('[CAPTCHA] ❌ Timeout: 2Captcha não resolveu em 5 minutos.');
     return null;
   }
 
